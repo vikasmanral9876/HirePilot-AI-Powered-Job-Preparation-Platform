@@ -1,5 +1,11 @@
 const { GoogleGenAI } = require("@google/genai");
 const puppeteer = require("puppeteer");
+const { prepareAtsResumeHtml } = require("./resumeTemplate.service");
+
+const dns = require("dns");
+if (typeof dns.setDefaultResultOrder === "function") {
+  dns.setDefaultResultOrder("ipv4first");
+}
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY,
@@ -14,8 +20,9 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 async function generateGeminiContent(params) {
   const modelCandidates = [
     params.model || GEMINI_MODEL,
-    "gemini-3.5-flash",
+    "gemini-3.7-flash",
     "gemini-3.8-flash",
+    "gemini-3.5-flash",
     "gemini-flash-latest",
   ];
   const uniqueModels = [...new Set(modelCandidates)];
@@ -25,10 +32,11 @@ async function generateGeminiContent(params) {
     const currentModel = uniqueModels[i];
     for (let retry = 0; retry < 2; retry++) {
       try {
-        return await ai.models.generateContent({
+        const attempt = ai.models.generateContent({
           ...params,
           model: currentModel,
         });
+        return await withTimeout(attempt, 22000, `Gemini Attempt (${currentModel})`);
       } catch (err) {
         lastError = err;
         const is404 =
@@ -40,17 +48,31 @@ async function generateGeminiContent(params) {
           err?.status === 503 ||
           err?.status === 429 ||
           err?.message?.includes("high demand") ||
-          err?.message?.includes("overloaded");
+          err?.message?.includes("overloaded") ||
+          err?.message?.includes("quota") ||
+          err?.message?.includes("rate limit");
+        const isTimeoutOrNetwork =
+          err?.code === "ETIMEDOUT" ||
+          err?.name === "ConnectTimeoutError" ||
+          err?.code === "UND_ERR_CONNECT_TIMEOUT" ||
+          err?.message?.includes("timed out") ||
+          err?.message?.includes("fetch failed") ||
+          err?.message?.includes("Connect Timeout Error");
 
         if (is404) {
           console.warn(`Gemini model "${currentModel}" unavailable (404/retired). Trying next model...`);
           break; // Don't retry a 404 model, proceed directly to fallback
         }
 
-        if (is503Or429) {
-          console.warn(`Gemini model "${currentModel}" transient issue (${err?.status || "503"}). Retrying in 1.5s...`);
-          await new Promise((r) => setTimeout(r, 1500 * (retry + 1)));
-          continue;
+        if (is503Or429 || isTimeoutOrNetwork) {
+          if (retry === 0) {
+            console.warn(`Gemini model "${currentModel}" transient issue (${err?.status || err?.code || "timeout"}). Retrying in 2s...`);
+            await new Promise((r) => setTimeout(r, 2000));
+            continue;
+          } else {
+            console.warn(`Gemini model "${currentModel}" persistent transient issue (${err?.status || err?.code || "timeout"}). Moving to next candidate...`);
+            break;
+          }
         }
 
         throw err;
@@ -261,6 +283,8 @@ async function generateInterviewReport({
 async function generatePdfFromHtml(htmlContent) {
   let browser;
   try {
+    const formattedHtml = prepareAtsResumeHtml(htmlContent);
+
     browser = await puppeteer.launch({
       headless: true,
       args: [
@@ -271,15 +295,16 @@ async function generatePdfFromHtml(htmlContent) {
     });
 
     const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
+    await page.setContent(formattedHtml, { waitUntil: "networkidle0" });
 
     const pdfBuffer = await page.pdf({
       format: "A4",
+      printBackground: true,
       margin: {
-        top: "20mm",
-        bottom: "20mm",
-        left: "15mm",
-        right: "15mm",
+        top: "0.45in",
+        bottom: "0.45in",
+        left: "0.48in",
+        right: "0.48in",
       },
     });
 
@@ -311,19 +336,38 @@ async function generateResumePdf({ resume, selfDescription, jobDescription, titl
     required: ["html"],
   };
 
-  const prompt = `Generate resume for a candidate with the following details: 
-                    ${title ? `Target Job Title: ${title}\n` : ""}
-                    Resume: ${resume || "Not provided"}
-                    Self Description: ${selfDescription || "Not provided"}
-                    Job Description: ${jobDescription || "Not provided"}
+  const prompt = `Generate a high-impact, ATS-optimized resume for a candidate tailored to the target job:
+${title ? `Target Job Title: ${title}\n` : ""}
+Resume: ${resume || "Not provided"}
+Self Description: ${selfDescription || "Not provided"}
+Job Description: ${jobDescription || "Not provided"}
 
-                    the response should be JSON object with a single field "html" which contains the HTML content of the resume which can be converted to PDF using any library like puppeteer
-                    The resume should be tailored for the given job description and should highlight the candidate's strengths and relevant experience. The HTML content should be well-formatted and structured, making it easy to read and visually appealing.
-                    The content of resume should be not sound like it's generated by AI and should be as close as possible to a real human-written resume.
-                    you can highlight the content using some colors or different font styles but the overall design should be simple and professional.
-                    The content should be ATS friendly, i.e. it should be easily parsable by ATS systems without losing important information.
-                    The resume should not be so lengthy, it should ideally be 1-2 pages long when converted to PDF. Focus on quality rather than quantity and make sure to include all the relevant information that can increase the candidate's chances of getting an interview call for the given job description.
-                  `;
+CRITICAL LAYOUT & ATS REQUIREMENTS:
+1. TARGET 1 PAGE: For standard/junior profiles (2-3 projects, education, skills), the resume MUST be structured to fit cleanly onto exactly ONE A4 page. Keep content concise, high-impact, and avoid verbose filler.
+2. ATS COMPATIBILITY: Use standard semantic HTML (<header>, <section>, <h1>, <h2>, <p>, <ul>, <li>). Do NOT use icons, emojis, progress bars, or complex decorative shapes. Use clean text separators like " | " or " • ".
+3. STRUCTURE:
+   - Header:
+     - <h1 class="name">Candidate Full Name (in uppercase)</h1>
+     - <div class="role">Target Job Title</div>
+     - <div class="contact-bar">Location | Email | Phone | LinkedIn | GitHub</div> (on a single compact line, without emojis)
+   - Professional Summary:
+     - <section class="section"><h2 class="section-title">Professional Summary</h2><p class="summary-text">...</p></section>
+     - 2-3 focused sentences summarizing technical proficiency and impact.
+   - Technical Skills:
+     - <section class="section"><h2 class="section-title">Technical Skills</h2>
+     - Group skills logically by category on single lines (e.g. Frontend, Backend, Databases, Tools) inside a 2-column or inline grid (<div class="skills-grid"><div class="skill-item"><span class="skill-label">Category:</span> Skills list</div>...</div>). Avoid long single-column bullet lists of individual skills.
+   - Projects:
+     - <section class="section"><h2 class="section-title">Key Projects</h2>
+     - Feature 2-3 most relevant projects. For each (<div class="project-item">):
+       - <div class="project-header"><span class="project-title">Project Name</span> <span class="project-tech">Tech Stack</span></div>
+       - <ul class="bullets">: 2-3 concise bullet points starting with strong action verbs.
+   - Education:
+     - <section class="section"><h2 class="section-title">Education</h2>
+     - Degree, Institution, Dates, GPA/details on compact lines.
+   - Certifications / Achievements (if present in profile):
+     - Keep concise, organized in a 2-column layout alongside Education or compact bullet lists.
+
+The response MUST be a JSON object with a single field "html" containing the HTML structure.`;
   try {
     const aiCall = generateGeminiContent({
       model: GEMINI_MODEL,
@@ -336,7 +380,7 @@ async function generateResumePdf({ resume, selfDescription, jobDescription, titl
 
     const response = await withTimeout(
       aiCall,
-      60000,
+      90000,
       "Resume Tailoring",
     );
 
