@@ -13,7 +13,7 @@ import "../dashboard.scss";
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const { reports, getReports, getResumePdf, loading } = useInterview();
+  const { reports, getReports, getResumePdf, retryResume, loading } = useInterview();
 
   const [activeDetailedReport, setActiveDetailedReport] = useState(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -63,16 +63,30 @@ const Dashboard = () => {
       addActivity("resume_downloaded", "Downloaded tailored ATS resume PDF", {
         reportId,
       });
-      setDownloadSuccessMessage("PDF generated successfully");
+      setDownloadSuccessMessage("ATS Resume downloaded successfully");
       setTimeout(() => setDownloadSuccessMessage(""), 4000);
     } catch (err) {
       console.error("Error downloading resume:", err);
       setDownloadErrorMessage(
-        err?.message || "Failed to generate your resume PDF. Please try again shortly."
+        err?.message || "Failed to download your resume PDF. Please try again shortly."
       );
       setTimeout(() => setDownloadErrorMessage(""), 4000);
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleRetryResume = async (reportId) => {
+    if (!reportId) return;
+    try {
+      await retryResume(reportId);
+      getReports();
+    } catch (err) {
+      console.error("Error retrying resume generation:", err);
+      setDownloadErrorMessage(
+        err?.message || "Failed to restart resume generation."
+      );
+      setTimeout(() => setDownloadErrorMessage(""), 4000);
     }
   };
 
@@ -132,6 +146,7 @@ const Dashboard = () => {
           <RecentInterviews
             reports={reports}
             onDownloadResume={handleDownloadResume}
+            onRetryResume={handleRetryResume}
             isDownloading={isDownloading}
             loading={loading}
           />

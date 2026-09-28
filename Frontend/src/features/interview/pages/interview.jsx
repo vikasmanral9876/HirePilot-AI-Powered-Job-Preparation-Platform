@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from "react";
 import "../style/interview.scss";
 import { useInterview } from "../hooks/useInterview.js";
-import { useParams, useNavigate } from "react-router";
-import { Trash2 } from "../../../components/ui/Icons";
+import { useParams, useNavigate, useLocation } from "react-router";
+import {
+  Trash2,
+  Download,
+  Loader2,
+  RotateCcw,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+} from "../../../components/ui/Icons";
 import PlanLoadingState from "../components/PlanLoadingState";
 
 
@@ -141,33 +149,70 @@ const RoadMapDay = ({ day }) => {
 // ── Main Component ────────────────────────────────────────────────────────────
 const Interview = () => {
   const [activeNav, setActiveNav] = useState("technical");
-  const { report, loading, getResumePdf, deleteReport } = useInterview();
+  const {
+    report,
+    loading,
+    deleteReport,
+    atsResumeStatus,
+    atsResumeError,
+    isDownloadingResume,
+    isRetryingResume,
+    downloadResume,
+    retryResume,
+  } = useInterview();
   const { interviewId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccessMessage, setDownloadSuccessMessage] = useState("");
   const [downloadErrorMessage, setDownloadErrorMessage] = useState("");
+  const [creationToast, setCreationToast] = useState("");
+
+  // Check if navigated from creation with background preparation flag
+  useEffect(() => {
+    if (location.state?.newPlanCreated) {
+      setCreationToast(
+        "Interview plan created successfully. We're preparing your ATS-tailored resume in the background."
+      );
+      window.history.replaceState({}, document.title);
+      const timer = setTimeout(() => setCreationToast(""), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [location.state]);
 
   const handleDownloadResume = async () => {
-    if (!interviewId || isDownloading) return;
-    setIsDownloading(true);
+    const targetId = interviewId || report?._id;
+    if (!targetId || isDownloadingResume) return;
     setDownloadSuccessMessage("");
     setDownloadErrorMessage("");
     try {
-      await getResumePdf(interviewId);
-      setDownloadSuccessMessage("PDF generated successfully");
+      await downloadResume(targetId);
+      setDownloadSuccessMessage("ATS Resume downloaded successfully");
       setTimeout(() => setDownloadSuccessMessage(""), 4000);
     } catch (err) {
-      console.error("Error generating resume PDF:", err);
+      console.error("Error downloading resume PDF:", err);
       setDownloadErrorMessage(
-        err?.message || "Failed to generate your resume PDF. Please try again shortly."
+        err?.message || "Failed to download your resume PDF. Please try again."
       );
       setTimeout(() => setDownloadErrorMessage(""), 4000);
-    } finally {
-      setIsDownloading(false);
+    }
+  };
+
+  const handleRetryResume = async () => {
+    const targetId = interviewId || report?._id;
+    if (!targetId || isRetryingResume) return;
+    setDownloadSuccessMessage("");
+    setDownloadErrorMessage("");
+    try {
+      await retryResume(targetId);
+    } catch (err) {
+      console.error("Error retrying resume generation:", err);
+      setDownloadErrorMessage(
+        err?.message || "Failed to restart resume generation. Please try again."
+      );
+      setTimeout(() => setDownloadErrorMessage(""), 4000);
     }
   };
 
@@ -252,23 +297,98 @@ const Interview = () => {
               </button>
             ))}
           </div>
-          <button
-            onClick={handleDownloadResume}
-            disabled={loading || isDownloading}
-            className="button primary-button"
-            style={{ opacity: loading || isDownloading ? 0.75 : 1, cursor: loading || isDownloading ? "not-allowed" : "pointer" }}
-          >
-            <svg
-              height={"0.8rem"}
-              style={{ marginRight: "0.8rem" }}
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M10.6144 17.7956 11.492 15.7854C12.2731 13.9966 13.6789 12.5726 15.4325 11.7942L17.8482 10.7219C18.6162 10.381 18.6162 9.26368 17.8482 8.92277L15.5079 7.88394C13.7092 7.08552 12.2782 5.60881 11.5105 3.75894L10.6215 1.61673C10.2916.821765 9.19319.821767 8.8633 1.61673L7.97427 3.75892C7.20657 5.60881 5.77553 7.08552 3.97685 7.88394L1.63658 8.92277C.868537 9.26368.868536 10.381 1.63658 10.7219L4.0523 11.7942C5.80589 12.5726 7.21171 13.9966 7.99275 15.7854L8.8704 17.7956C9.20776 18.5682 10.277 18.5682 10.6144 17.7956ZM19.4014 22.6899 19.6482 22.1242C20.0882 21.1156 20.8807 20.3125 21.8695 19.8732L22.6299 19.5353C23.0412 19.3526 23.0412 18.7549 22.6299 18.5722L21.9121 18.2532C20.8978 17.8026 20.0911 16.9698 19.6586 15.9269L19.4052 15.3156C19.2285 14.8896 18.6395 14.8896 18.4628 15.3156L18.2094 15.9269C17.777 16.9698 16.9703 17.8026 15.956 18.2532L15.2381 18.5722C14.8269 18.7549 14.8269 19.3526 15.2381 19.5353L15.9985 19.8732C16.9874 20.3125 17.7798 21.1156 18.2198 22.1242L18.4667 22.6899C18.6473 23.104 19.2207 23.104 19.4014 22.6899Z"></path>
-            </svg>
-            Download Resume
-          </button>
+          {/* ── ATS Resume Section ── */}
+          <div className="ats-resume-nav-card">
+            <div className="ats-resume-nav-card__header">
+              <span className="ats-resume-nav-card__title">ATS Resume</span>
+              <span className={`ats-status-badge ats-status-badge--${atsResumeStatus}`}>
+                <span className="ats-status-dot" />
+                {atsResumeStatus === "generating"
+                  ? "Preparing"
+                  : atsResumeStatus === "ready"
+                  ? "Ready"
+                  : atsResumeStatus === "failed"
+                  ? "Failed"
+                  : "Not Started"}
+              </span>
+            </div>
+
+            <p className="ats-resume-nav-card__description">
+              {atsResumeStatus === "generating" &&
+                "Preparing your ATS resume... Your resume is being tailored and formatted."}
+              {atsResumeStatus === "ready" &&
+                "Your ATS-tailored resume is ready."}
+              {atsResumeStatus === "failed" &&
+                (atsResumeError || "We couldn't generate your ATS resume.")}
+              {atsResumeStatus === "not_started" &&
+                "Your ATS resume hasn't been generated yet."}
+            </p>
+
+            {atsResumeStatus === "generating" && (
+              <button
+                type="button"
+                className="button ats-resume-btn ats-resume-btn--generating"
+                disabled
+              >
+                <Loader2 size={15} className="spin-loader" />
+                <span>Generating...</span>
+              </button>
+            )}
+
+            {atsResumeStatus === "ready" && (
+              <button
+                type="button"
+                onClick={handleDownloadResume}
+                disabled={isDownloadingResume}
+                className="button primary-button ats-resume-btn ats-resume-btn--ready"
+              >
+                {isDownloadingResume ? (
+                  <>
+                    <Loader2 size={15} className="spin-loader" />
+                    <span>Downloading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={15} />
+                    <span>Download ATS Resume</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {atsResumeStatus === "failed" && (
+              <button
+                type="button"
+                onClick={handleRetryResume}
+                disabled={isRetryingResume}
+                className="button ats-resume-btn ats-resume-btn--retry"
+              >
+                <RotateCcw size={15} className={isRetryingResume ? "spin-loader" : ""} />
+                <span>{isRetryingResume ? "Starting..." : "Try Again"}</span>
+              </button>
+            )}
+
+            {atsResumeStatus === "not_started" && (
+              <button
+                type="button"
+                onClick={handleRetryResume}
+                disabled={isRetryingResume}
+                className="button primary-button ats-resume-btn ats-resume-btn--start"
+              >
+                {isRetryingResume ? (
+                  <>
+                    <Loader2 size={15} className="spin-loader" />
+                    <span>Starting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={15} />
+                    <span>Generate ATS Resume</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
 
           <button
             onClick={() => setShowDeleteModal(true)}
@@ -431,6 +551,26 @@ const Interview = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Non-blocking Plan Creation Banner */}
+      {creationToast && (
+        <div className="ats-creation-toast">
+          <div className="ats-creation-toast__icon">
+            <Sparkles size={18} />
+          </div>
+          <div className="ats-creation-toast__content">
+            <strong>Plan created successfully!</strong>
+            <span>We're preparing your ATS-tailored resume in the background.</span>
+          </div>
+          <button
+            type="button"
+            className="ats-creation-toast__close"
+            onClick={() => setCreationToast("")}
+          >
+            &times;
+          </button>
         </div>
       )}
 

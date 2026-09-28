@@ -56,7 +56,7 @@ const getStatus = (score) => {
 };
 
 const InterviewHistory = () => {
-  const { reports, getReports, getResumePdf, deleteReport, loading, pagination } = useInterview();
+  const { reports, getReports, getResumePdf, retryResume, deleteReport, loading, pagination } = useInterview();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -83,6 +83,36 @@ const InterviewHistory = () => {
       console.error("Failed to delete interview plan:", err);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleDownload = async (reportId) => {
+    if (!reportId || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      await getResumePdf(reportId);
+      setToastMessage("ATS Resume downloaded successfully");
+      setTimeout(() => setToastMessage(""), 3500);
+    } catch (err) {
+      console.error("Error downloading resume:", err);
+      setToastMessage(err?.message || "Failed to download resume. Please try again.");
+      setTimeout(() => setToastMessage(""), 3500);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleRetry = async (reportId) => {
+    if (!reportId) return;
+    try {
+      await retryResume(reportId);
+      setToastMessage("Preparing ATS resume in background...");
+      getReports();
+      setTimeout(() => setToastMessage(""), 3500);
+    } catch (err) {
+      console.error("Error retrying resume:", err);
+      setToastMessage(err?.message || "Failed to restart resume generation.");
+      setTimeout(() => setToastMessage(""), 3500);
     }
   };
 
@@ -150,24 +180,6 @@ const InterviewHistory = () => {
     setStatusFilter("all");
     setTypeFilter("all");
     setSortBy("newest");
-  };
-
-  const handleDownload = async (reportId) => {
-    if (isDownloading || !reportId) return;
-    setIsDownloading(true);
-    try {
-      await getResumePdf(reportId);
-      setToastMessage("PDF generated successfully");
-      setTimeout(() => setToastMessage(""), 3500);
-    } catch (err) {
-      console.error("Download error:", err);
-      setToastMessage(
-        err?.message || "Failed to generate your resume PDF. Please try again shortly."
-      );
-      setTimeout(() => setToastMessage(""), 4000);
-    } finally {
-      setIsDownloading(false);
-    }
   };
 
   const formatDate = (dateStr) => {
@@ -439,16 +451,40 @@ const InterviewHistory = () => {
                         {/* Actions */}
                         <td style={{ textAlign: "right" }}>
                           <div className="col-actions">
-                            <button
-                              type="button"
-                              className="row-btn"
-                              onClick={() => handleDownload(report._id)}
-                              title="Download tailored ATS Resume"
-                              disabled={isDownloading}
-                            >
-                              <Download size={13} />
-                              <span>Resume</span>
-                            </button>
+                            {report.atsResume?.status === "generating" ? (
+                              <button
+                                type="button"
+                                className="row-btn"
+                                disabled
+                                style={{ opacity: 0.75, cursor: "not-allowed" }}
+                                title="Preparing ATS resume in background"
+                              >
+                                <Loader2 size={13} className="spin-loader" />
+                                <span>Preparing...</span>
+                              </button>
+                            ) : report.atsResume?.status === "failed" ? (
+                              <button
+                                type="button"
+                                className="row-btn"
+                                onClick={() => handleRetry(report._id)}
+                                title="Resume generation failed. Click to retry"
+                                style={{ color: "#f87171" }}
+                              >
+                                <RotateCcw size={13} />
+                                <span>Retry</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="row-btn"
+                                onClick={() => handleDownload(report._id)}
+                                title="Download tailored ATS Resume"
+                                disabled={isDownloading}
+                              >
+                                <Download size={13} />
+                                <span>Resume</span>
+                              </button>
+                            )}
 
                             <Link
                               to={`/interview/${report._id}`}

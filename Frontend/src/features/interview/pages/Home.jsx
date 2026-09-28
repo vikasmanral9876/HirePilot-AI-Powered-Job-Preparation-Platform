@@ -118,7 +118,7 @@ const Home = () => {
         resumeFile,
       });
       if (data?._id) {
-        navigate(`/interview/${data._id}`);
+        navigate(`/interview/${data._id}`, { state: { newPlanCreated: true } });
       }
     } catch (err) {
       console.error("Failed to generate interview strategy:", err);

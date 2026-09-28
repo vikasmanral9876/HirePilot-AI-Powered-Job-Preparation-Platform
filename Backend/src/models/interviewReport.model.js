@@ -107,6 +107,32 @@ const preparationPlanSchema = new mongoose.Schema({
   ],
 });
 
+const atsResumeSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["not_started", "generating", "ready", "failed"],
+      default: "not_started",
+    },
+    pdfData: {
+      type: Buffer,
+      default: null,
+      select: false, // Prevents loading binary PDF buffer in standard queries
+    },
+    generatedAt: {
+      type: Date,
+      default: null,
+    },
+    errorMessage: {
+      type: String,
+      default: null,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
 const interviewReportSchema = new mongoose.Schema(
   {
     jobDescription: {
@@ -130,12 +156,21 @@ const interviewReportSchema = new mongoose.Schema(
     preparationPlan: [preparationPlanSchema],
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "users"
+      ref: "users",
     },
     title: {
       type: String,
-      required: [ true, "Job title is required" ]
-    }
+      required: [true, "Job title is required"],
+    },
+    atsResume: {
+      type: atsResumeSchema,
+      default: () => ({
+        status: "not_started",
+        pdfData: null,
+        generatedAt: null,
+        errorMessage: null,
+      }),
+    },
   },
   {
     timestamps: true,

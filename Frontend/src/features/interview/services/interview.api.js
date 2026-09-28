@@ -60,6 +60,10 @@ api.interceptors.response.use(
     if (!error.response) {
       error.message =
         "Network connection error. Please check your internet connection.";
+    } else if (error.response.status === 409) {
+      error.message =
+        error.response.data?.message ||
+        "Your ATS resume is currently being generated. Please wait a moment.";
     } else if (error.response.status === 429) {
       error.message =
         error.response.data?.message ||
@@ -86,12 +90,27 @@ export const getAllInterviewReports = async ({ page, limit } = {}) => {
 };
 
 /**
- * @description Service to generate resume pdf based on user self description, resume content and job description.
+ * @description Service to query ATS resume generation status.
  */
-export const generateResumePdf = async ({ interviewReportId }) => {
-  const response = await api.post(
+export const getAtsResumeStatus = async (interviewId) => {
+  const response = await api.get(`/api/interview/${interviewId}/resume/status`);
+  return response.data;
+};
+
+/**
+ * @description Service to trigger retry for failed or not_started ATS resume generation.
+ */
+export const retryAtsResume = async (interviewId) => {
+  const response = await api.post(`/api/interview/${interviewId}/resume/retry`);
+  return response.data;
+};
+
+/**
+ * @description Service to download the pre-generated ATS tailored resume PDF.
+ */
+export const downloadAtsResume = async ({ interviewReportId }) => {
+  const response = await api.get(
     `/api/interview/resume/pdf/${interviewReportId}`,
-    null,
     {
       responseType: "blob",
     },
@@ -101,10 +120,16 @@ export const generateResumePdf = async ({ interviewReportId }) => {
 };
 
 /**
+ * @description Alias to downloadAtsResume for backwards compatibility.
+ */
+export const generateResumePdf = async ({ interviewReportId }) => {
+  return downloadAtsResume({ interviewReportId });
+};
+
+/**
  * @description Service to delete an interview report by id.
  */
 export const deleteInterviewReport = async (interviewId) => {
   const response = await api.delete(`/api/interview/${interviewId}`);
   return response.data;
 };
-

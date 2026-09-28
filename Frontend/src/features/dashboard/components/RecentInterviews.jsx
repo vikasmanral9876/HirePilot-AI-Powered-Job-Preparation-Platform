@@ -8,9 +8,16 @@ import {
   Download,
   Plus,
   Loader2,
+  RotateCcw,
 } from "../../../components/ui/Icons";
 
-const RecentInterviews = ({ reports = [], onDownloadResume, isDownloading, loading = false }) => {
+const RecentInterviews = ({
+  reports = [],
+  onDownloadResume,
+  onRetryResume,
+  isDownloading,
+  loading = false,
+}) => {
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredReports = reports.filter((item) =>
@@ -96,16 +103,47 @@ const RecentInterviews = ({ reports = [], onDownloadResume, isDownloading, loadi
                     <span style={{ fontSize: "0.68rem", opacity: 0.85 }}>match</span>
                   </div>
 
-                  <button
-                    type="button"
-                    className="action-btn"
-                    onClick={() => onDownloadResume(report._id)}
-                    title="Download Tailored ATS Resume PDF"
-                    disabled={isDownloading}
-                  >
-                    <Download size={14} />
-                    <span>Resume</span>
-                  </button>
+                  {report.atsResume?.status === "generating" ? (
+                    <button
+                      type="button"
+                      className="action-btn"
+                      disabled
+                      title="ATS resume is currently preparing in the background"
+                      style={{ opacity: 0.75, cursor: "not-allowed" }}
+                    >
+                      <Loader2 size={14} className="spin-loader" />
+                      <span>Preparing...</span>
+                    </button>
+                  ) : report.atsResume?.status === "failed" ? (
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={() =>
+                        onRetryResume
+                          ? onRetryResume(report._id)
+                          : onDownloadResume(report._id)
+                      }
+                      title="Resume generation failed. Click to retry"
+                      style={{
+                        color: "#f87171",
+                        borderColor: "rgba(239, 68, 68, 0.3)",
+                      }}
+                    >
+                      <RotateCcw size={14} />
+                      <span>Retry</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={() => onDownloadResume(report._id)}
+                      title="Download Tailored ATS Resume PDF"
+                      disabled={isDownloading}
+                    >
+                      <Download size={14} />
+                      <span>Resume</span>
+                    </button>
+                  )}
 
                   <Link
                     to={`/interview/${report._id}`}

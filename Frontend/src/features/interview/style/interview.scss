@@ -475,3 +475,246 @@ $severity-low: #3fb950;
     border-color: rgba($severity-low, 0.25);
   }
 }
+
+// ── ATS Resume Nav Card & Actions ─────────────────────────────────────────────
+.ats-resume-nav-card {
+  background: rgba($bg-panel, 0.85);
+  border: 1px solid $border-color;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    border-color: rgba(255, 45, 120, 0.3);
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  &__title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: $text-primary;
+  }
+
+  &__description {
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: $text-muted;
+    margin: 0;
+  }
+}
+
+.ats-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+
+  &--generating {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.25);
+
+    .ats-status-dot {
+      background: #f59e0b;
+      box-shadow: 0 0 6px #f59e0b;
+      animation: atsPulse 1.5s infinite;
+    }
+  }
+
+  &--ready {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.25);
+
+    .ats-status-dot {
+      background: #10b981;
+      box-shadow: 0 0 6px #10b981;
+    }
+  }
+
+  &--failed {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.25);
+
+    .ats-status-dot {
+      background: #ef4444;
+    }
+  }
+
+  &--not_started {
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.1);
+    border-color: rgba(148, 163, 184, 0.2);
+
+    .ats-status-dot {
+      background: #94a3b8;
+    }
+  }
+}
+
+.ats-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@keyframes atsPulse {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+}
+
+.ats-resume-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &--generating {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    cursor: not-allowed;
+    opacity: 0.9;
+  }
+
+  &--ready {
+    background: #ff2d78;
+    color: #ffffff;
+    border: none;
+
+    &:hover:not(:disabled) {
+      background: #e02468;
+      box-shadow: 0 4px 12px rgba(255, 45, 120, 0.35);
+    }
+  }
+
+  &--retry {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+
+    &:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.22);
+      color: #ffffff;
+    }
+  }
+
+  &--start {
+    background: #ff2d78;
+    color: #ffffff;
+    border: none;
+
+    &:hover:not(:disabled) {
+      background: #e02468;
+    }
+  }
+}
+
+// ── Non-blocking Creation Toast ───────────────────────────────────────────────
+.ats-creation-toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  background: #1c2230;
+  border: 1px solid rgba(255, 45, 120, 0.4);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 16px rgba(255, 45, 120, 0.2);
+  border-radius: 0.75rem;
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  z-index: 99999;
+  max-width: 440px;
+  animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+  &__icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 45, 120, 0.15);
+    color: #ff2d78;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+
+    strong {
+      color: #ffffff;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    span {
+      color: #94a3b8;
+      font-size: 0.775rem;
+      line-height: 1.4;
+    }
+  }
+
+  &__close {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0;
+    margin-left: auto;
+    transition: color 0.15s;
+
+    &:hover {
+      color: #ffffff;
+    }
+  }
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

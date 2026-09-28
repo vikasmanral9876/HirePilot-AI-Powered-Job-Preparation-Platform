@@ -22,6 +22,8 @@ import {
   X,
   Target,
   AlertCircle,
+  RotateCcw,
+  Loader2,
 } from "../../../components/ui/Icons";
 
 const ResumeManager = () => {
@@ -29,6 +31,7 @@ const ResumeManager = () => {
     reports,
     getReports,
     getResumePdf,
+    retryResume,
     stagedResumeFile,
     setStagedResumeFile,
   } = useInterview();
@@ -143,16 +146,33 @@ const ResumeManager = () => {
     setDownloadErrorMessage("");
     try {
       await getResumePdf(reportId);
-      setDownloadSuccessMessage("PDF generated successfully");
+      setDownloadSuccessMessage("ATS Resume downloaded successfully");
       setTimeout(() => setDownloadSuccessMessage(""), 4000);
     } catch (err) {
       console.error("Error downloading resume PDF:", err);
       setDownloadErrorMessage(
-        err?.message || "Failed to generate your resume PDF. Please try again shortly."
+        err?.message || "Failed to download your resume PDF. Please try again shortly."
       );
       setTimeout(() => setDownloadErrorMessage(""), 4000);
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    const reportId = activeReportDetails?._id || reports[0]?._id;
+    if (!reportId) return;
+    try {
+      await retryResume(reportId);
+      setDownloadSuccessMessage("Preparing ATS resume in background...");
+      getReports();
+      setTimeout(() => setDownloadSuccessMessage(""), 4000);
+    } catch (err) {
+      console.error("Error retrying resume:", err);
+      setDownloadErrorMessage(
+        err?.message || "Failed to restart resume generation."
+      );
+      setTimeout(() => setDownloadErrorMessage(""), 4000);
     }
   };
 
@@ -293,15 +313,42 @@ const ResumeManager = () => {
                     <span>{showTextPreview ? "Hide Extracted Text" : "View Parsed Text"}</span>
                   </button>
 
-                  <button
-                    type="button"
-                    className="action-btn action-btn--primary"
-                    onClick={handleDownload}
-                    disabled={isDownloading}
-                  >
-                    <Download size={16} />
-                    <span>Download ATS Tailored PDF</span>
-                  </button>
+                  {activeReportDetails?.atsResume?.status === "generating" ? (
+                    <button
+                      type="button"
+                      className="action-btn"
+                      disabled
+                      style={{ opacity: 0.75, cursor: "not-allowed" }}
+                      title="ATS resume is currently preparing in the background"
+                    >
+                      <Loader2 size={16} className="spin-loader" />
+                      <span>Preparing ATS Resume...</span>
+                    </button>
+                  ) : activeReportDetails?.atsResume?.status === "failed" ? (
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={handleRetry}
+                      style={{
+                        color: "#f87171",
+                        borderColor: "rgba(239, 68, 68, 0.3)",
+                      }}
+                      title="Resume generation failed. Click to retry"
+                    >
+                      <RotateCcw size={16} />
+                      <span>Retry Generation</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="action-btn action-btn--primary"
+                      onClick={handleDownload}
+                      disabled={isDownloading}
+                    >
+                      <Download size={16} />
+                      <span>Download ATS Tailored PDF</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
