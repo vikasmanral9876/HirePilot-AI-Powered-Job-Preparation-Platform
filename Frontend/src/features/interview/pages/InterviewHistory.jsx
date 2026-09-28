@@ -18,7 +18,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Sparkles,
 } from "../../../components/ui/Icons";
+import { getAtsResumeStatus } from "../services/interview.api";
+import Toast from "../../../components/ui/Toast";
 
 const parseRoleAndCompany = (rawTitle) => {
   if (!rawTitle) return { role: "Target Position", company: "Target Employer" };
@@ -62,57 +65,102 @@ const InterviewHistory = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [retryingId, setRetryingId] = useState(null);
   const [deleteModalPlan, setDeleteModalPlan] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
+  const [toast, setToast] = useState({ message: "", type: "info" });
 
   useEffect(() => {
     getReports();
   }, []);
+
+  // Background polling for any reports currently in "generating" state
+  useEffect(() => {
+    const generatingReports = reports.filter(
+      (r) => r.atsResume?.status === "generating"
+    );
+    if (generatingReports.length === 0) return;
+
+    const timer = setInterval(async () => {
+      let shouldRefresh = false;
+      for (const r of generatingReports) {
+        try {
+          const res = await getAtsResumeStatus(r._id);
+          if (res?.status && res.status !== "generating") {
+            shouldRefresh = true;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      if (shouldRefresh) {
+        getReports();
+      }
+    }, 3500);
+
+    return () => clearInterval(timer);
+  }, [reports]);
 
   const handleDeletePlan = async () => {
     if (!deleteModalPlan) return;
     setIsDeleting(true);
     try {
       await deleteReport(deleteModalPlan._id);
-      setToastMessage(`Deleted interview plan "${deleteModalPlan.title}"`);
+      setToast({
+        message: `Deleted interview plan "${deleteModalPlan.title}"`,
+        type: "success",
+      });
       setDeleteModalPlan(null);
-      setTimeout(() => setToastMessage(""), 3500);
     } catch (err) {
       console.error("Failed to delete interview plan:", err);
+      setToast({
+        message: err?.message || "Failed to delete interview plan.",
+        type: "error",
+      });
     } finally {
       setIsDeleting(false);
     }
   };
 
   const handleDownload = async (reportId) => {
-    if (!reportId || isDownloading) return;
-    setIsDownloading(true);
+    if (!reportId || downloadingId === reportId) return;
+    setDownloadingId(reportId);
     try {
       await getResumePdf(reportId);
-      setToastMessage("ATS Resume downloaded successfully");
-      setTimeout(() => setToastMessage(""), 3500);
+      setToast({
+        message: "ATS Resume downloaded successfully",
+        type: "success",
+      });
     } catch (err) {
       console.error("Error downloading resume:", err);
-      setToastMessage(err?.message || "Failed to download resume. Please try again.");
-      setTimeout(() => setToastMessage(""), 3500);
+      setToast({
+        message: err?.message || "Failed to download resume. Please try again.",
+        type: "error",
+      });
     } finally {
-      setIsDownloading(false);
+      setDownloadingId(null);
     }
   };
 
   const handleRetry = async (reportId) => {
-    if (!reportId) return;
+    if (!reportId || retryingId === reportId) return;
+    setRetryingId(reportId);
     try {
       await retryResume(reportId);
-      setToastMessage("Preparing ATS resume in background...");
+      setToast({
+        message: "Preparing ATS resume in background...",
+        type: "info",
+      });
       getReports();
-      setTimeout(() => setToastMessage(""), 3500);
     } catch (err) {
       console.error("Error retrying resume:", err);
-      setToastMessage(err?.message || "Failed to restart resume generation.");
-      setTimeout(() => setToastMessage(""), 3500);
+      setToast({
+        message: err?.message || "Failed to restart resume generation.",
+        type: "error",
+      });
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -458,9 +506,31 @@ const InterviewHistory = () => {
                                 disabled
                                 style={{ opacity: 0.75, cursor: "not-allowed" }}
                                 title="Preparing ATS resume in background"
+                                aria-busy="true"
                               >
                                 <Loader2 size={13} className="spin-loader" />
                                 <span>Preparing...</span>
+                              </button>
+                            ) : report.atsResume?.status === "ready" ? (
+                              <button
+                                type="button"
+                                className="row-btn"
+                                onClick={() => handleDownload(report._id)}
+                                title="Download tailored ATS Resume"
+                                disabled={downloadingId === report._id}
+                                aria-busy={downloadingId === report._id}
+                              >
+                                {downloadingId === report._id ? (
+                                  <>
+                                    <Loader2 size={13} className="spin-loader" />
+                                    <span>Downloading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download size={13} />
+                                    <span>Resume</span>
+                                  </>
+                                )}
                               </button>
                             ) : report.atsResume?.status === "failed" ? (
                               <button
@@ -468,21 +538,42 @@ const InterviewHistory = () => {
                                 className="row-btn"
                                 onClick={() => handleRetry(report._id)}
                                 title="Resume generation failed. Click to retry"
+                                disabled={retryingId === report._id}
+                                aria-busy={retryingId === report._id}
                                 style={{ color: "#f87171" }}
                               >
-                                <RotateCcw size={13} />
-                                <span>Retry</span>
+                                {retryingId === report._id ? (
+                                  <>
+                                    <Loader2 size={13} className="spin-loader" />
+                                    <span>Retrying...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <RotateCcw size={13} />
+                                    <span>Retry</span>
+                                  </>
+                                )}
                               </button>
                             ) : (
                               <button
                                 type="button"
                                 className="row-btn"
-                                onClick={() => handleDownload(report._id)}
-                                title="Download tailored ATS Resume"
-                                disabled={isDownloading}
+                                onClick={() => handleRetry(report._id)}
+                                title="Generate tailored ATS resume"
+                                disabled={retryingId === report._id}
+                                aria-busy={retryingId === report._id}
                               >
-                                <Download size={13} />
-                                <span>Resume</span>
+                                {retryingId === report._id ? (
+                                  <>
+                                    <Loader2 size={13} className="spin-loader" />
+                                    <span>Preparing...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles size={13} />
+                                    <span>Generate</span>
+                                  </>
+                                )}
                               </button>
                             )}
 
@@ -564,24 +655,25 @@ const InterviewHistory = () => {
             <div className="dash-empty-state__icon">
               <FileText size={26} />
             </div>
-            <h3>No interview plans in history</h3>
+            <h3>No interview plans yet.</h3>
             <p>
-              You haven't generated any interview preparation plans yet. Analyze a job description and resume to create your first customized roadmap.
+              Create your first interview plan to start preparing for your next opportunity.
             </p>
             <Link to="/create" className="empty-cta-btn">
               <Plus size={16} />
-              <span>Create Your First Interview Plan</span>
+              <span>Create Interview Plan</span>
             </Link>
           </div>
         )}
       </div>
 
       {/* Toast Feedback */}
-      {toastMessage && (
-        <div className="profile-toast">
-          <CheckCircle2 size={16} />
-          <span>{toastMessage}</span>
-        </div>
+      {toast.message && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({ message: "", type: "info" })}
+        />
       )}
 
       {/* Delete Confirmation Modal */}

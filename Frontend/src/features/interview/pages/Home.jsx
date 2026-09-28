@@ -7,8 +7,25 @@ import {
   getStagedResume,
   clearStagedResume,
 } from "../services/resumeStorage.js";
-import { AlertCircle, RotateCcw, X } from "../../../components/ui/Icons";
-import PlanLoadingState from "../components/PlanLoadingState";
+import {
+  AlertCircle,
+  RotateCcw,
+  X,
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+} from "../../../components/ui/Icons";
+import Toast from "../../../components/ui/Toast";
+
+const isPageReload = (() => {
+  try {
+    const navEntry = window.performance?.getEntriesByType?.("navigation")?.[0];
+    if (navEntry) return navEntry.type === "reload";
+    return window.performance?.navigation?.type === 1;
+  } catch (e) {
+    return false;
+  }
+})();
 
 const Home = () => {
   const location = useLocation();
@@ -22,29 +39,33 @@ const Home = () => {
   const [jobDescription, setJobDescription] = useState("");
   const [selfDescription, setSelfDescription] = useState("");
   const [selectedFile, setSelectedFile] = useState(
-    location.state?.resumeFile || stagedResumeFile || null
+    !isPageReload && (location.state?.resumeFile || stagedResumeFile) ? (location.state?.resumeFile || stagedResumeFile) : null
   );
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [generationError, setGenerationError] = useState(false);
+  const [isQuotaError, setIsQuotaError] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successToast, setSuccessToast] = useState("");
   const resumeInputRef = useRef();
 
   const navigate = useNavigate();
 
-  // Auto-sync resume from navigation state, InterviewContext, or IndexedDB storage
+  // Reset resume on page refresh or sync in-memory navigation state
   useEffect(() => {
-    const passedFile = location.state?.resumeFile || stagedResumeFile;
-    if (passedFile) {
-      setSelectedFile(passedFile);
-    } else if (!selectedFile) {
-      getStagedResume().then((file) => {
-        if (file) {
-          setSelectedFile(file);
-          setStagedResumeFile(file);
-        }
-      });
+    if (isPageReload) {
+      setSelectedFile(null);
+      setStagedResumeFile(null);
+      clearStagedResume();
+      if (resumeInputRef.current) {
+        resumeInputRef.current.value = "";
+      }
+      if (window.history?.replaceState) {
+        window.history.replaceState({}, document.title);
+      }
+    } else if (location.state?.resumeFile) {
+      setSelectedFile(location.state.resumeFile);
     }
-  }, [location.state, stagedResumeFile]);
+  }, [location.state]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -53,7 +74,6 @@ const Home = () => {
       setStagedResumeFile(file);
       saveStagedResume(file);
       setErrorMessage("");
-      setGenerationError(false);
     }
   };
 
@@ -86,7 +106,6 @@ const Home = () => {
       setStagedResumeFile(file);
       saveStagedResume(file);
       setErrorMessage("");
-      setGenerationError(false);
     }
   };
 
@@ -99,8 +118,10 @@ const Home = () => {
   };
 
   const handleGenerateReport = async () => {
+    if (isSubmitting || loading) return;
     setErrorMessage("");
-    setGenerationError(false);
+    setIsQuotaError(false);
+
     const resumeFile = selectedFile || resumeInputRef.current?.files?.[0];
     if (!resumeFile) {
       setErrorMessage("Please upload your resume (PDF) before generating the plan.");
@@ -111,46 +132,66 @@ const Home = () => {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const data = await generateReport({
-        jobDescription,
-        selfDescription,
+        jobDescription: jobDescription.trim(),
+        selfDescription: selfDescription.trim(),
         resumeFile,
       });
       if (data?._id) {
+        // Reset resume state and inputs immediately after successful generation
+        setSelectedFile(null);
+        setStagedResumeFile(null);
+        clearStagedResume();
+        setJobDescription("");
+        setSelfDescription("");
+        if (resumeInputRef.current) {
+          resumeInputRef.current.value = "";
+        }
+        if (window.history?.replaceState) {
+          window.history.replaceState({}, document.title);
+        }
+
+        setSuccessToast("Interview plan created successfully.");
         navigate(`/interview/${data._id}`, { state: { newPlanCreated: true } });
       }
     } catch (err) {
       console.error("Failed to generate interview strategy:", err);
-      setGenerationError(true);
-      setErrorMessage("We couldn't generate your interview. Please try again.");
+      const rawMsg = err?.message || "";
+      const isQuota =
+        err?.isQuotaExhausted ||
+        rawMsg.toLowerCase().includes("quota") ||
+        rawMsg.toLowerCase().includes("temporarily unavailable") ||
+        err?.response?.status === 429;
+
+      if (isQuota) {
+        setIsQuotaError(true);
+        setErrorMessage("AI generation is temporarily unavailable. Please try again later.");
+      } else {
+        setIsQuotaError(false);
+        setErrorMessage(
+          err?.message && !err.message.includes("at ")
+            ? err.message
+            : "We couldn't generate your interview. Please try again."
+        );
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <PlanLoadingState
-        title="Generating Your Custom Interview Plan"
-      />
-    );
-  }
-
-  if (generationError) {
-    return (
-      <PlanLoadingState
-        isError={true}
-        errorTitle="We couldn't generate your interview."
-        errorSubtitle="Please try again."
-        onRetry={handleGenerateReport}
-        onCancel={() => {
-          setGenerationError(false);
-        }}
-      />
-    );
-  }
-
   return (
     <div className="home-page">
+      {/* Toast Notification */}
+      {successToast && (
+        <Toast
+          message={successToast}
+          type="success"
+          onClose={() => setSuccessToast("")}
+        />
+      )}
+
       {/* Page Header */}
       <header className="page-header">
         <h1>
@@ -170,7 +211,14 @@ const Home = () => {
               <AlertCircle size={20} />
             </div>
             <div className="home-error-banner__content">
-              {errorMessage.includes("couldn't generate") ? (
+              {isQuotaError ? (
+                <>
+                  <strong className="home-error-banner__title">
+                    AI Service Notice
+                  </strong>
+                  <span className="home-error-banner__desc">{errorMessage}</span>
+                </>
+              ) : errorMessage.includes("couldn't generate") ? (
                 <>
                   <strong className="home-error-banner__title">
                     We couldn't generate your interview.
@@ -184,11 +232,12 @@ const Home = () => {
           </div>
 
           <div className="home-error-banner__actions">
-            {errorMessage.includes("couldn't generate") && (
+            {!isQuotaError && errorMessage.includes("couldn't generate") && (
               <button
                 type="button"
                 onClick={handleGenerateReport}
                 className="home-error-banner__retry-btn"
+                disabled={isSubmitting || loading}
               >
                 <RotateCcw size={14} />
                 <span>Try Again</span>
@@ -198,7 +247,7 @@ const Home = () => {
               type="button"
               onClick={() => {
                 setErrorMessage("");
-                setGenerationError(false);
+                setIsQuotaError(false);
               }}
               className="home-error-banner__close-btn"
               aria-label="Dismiss error"
@@ -242,6 +291,7 @@ const Home = () => {
               className="panel__textarea"
               placeholder={`Paste the full job description here...\ne.g. 'Senior Frontend Engineer at Google requires proficiency in React, TypeScript, and large-scale system design...'`}
               maxLength={5000}
+              disabled={isSubmitting || loading}
             />
             <div className="char-counter">
               {jobDescription.length} / 5000 chars
@@ -390,6 +440,7 @@ const Home = () => {
                 name="selfDescription"
                 className="panel__textarea panel__textarea--short"
                 placeholder="Briefly describe your experience, key skills, and years of experience if you don't have a resume handy..."
+                disabled={isSubmitting || loading}
               />
             </div>
 
@@ -431,26 +482,37 @@ const Home = () => {
           </div>
         </div>
 
+        {/* Contextual Generation Status */}
+        {(isSubmitting || loading) && (
+          <div className="plan-creation-status" role="status" aria-live="polite">
+            <Loader2 size={16} className="spin-loader" />
+            <span>Analyzing role requirements & synthesizing tailored preparation plan...</span>
+          </div>
+        )}
+
         {/* Card Footer */}
         <div className="interview-card__footer">
           <span className="footer-info">
             AI-Powered Strategy Generation &bull; Approx 30s
           </span>
           <button
+            type="button"
             onClick={handleGenerateReport}
             className="generate-btn"
-            disabled={loading}
+            disabled={isSubmitting || loading}
+            aria-busy={isSubmitting || loading}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
-              <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z" />
-            </svg>
-            Generate My Interview Strategy
+            {isSubmitting || loading ? (
+              <>
+                <Loader2 size={16} className="spin-loader" />
+                <span>Creating Interview Plan...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} />
+                <span>Create Interview Plan</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -480,13 +542,6 @@ const Home = () => {
           </ul>
         </section>
       )}
-
-      {/* Page Footer */}
-      <footer className="page-footer">
-        <a href="#">Privacy Policy</a>
-        <a href="#">Terms of Service</a>
-        <a href="#">Help Center</a>
-      </footer>
     </div>
   );
 };

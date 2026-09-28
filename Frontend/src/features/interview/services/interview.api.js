@@ -57,22 +57,98 @@ api.interceptors.response.use(
       }
     }
 
+    const status = error.response?.status;
+    const serverMsg = error.response?.data?.message || "";
+    const isBlob = error.config?.responseType === "blob";
+
+    // 1. Network failure
     if (!error.response) {
       error.message =
-        "Network connection error. Please check your internet connection.";
-    } else if (error.response.status === 409) {
-      error.message =
-        error.response.data?.message ||
-        "Your ATS resume is currently being generated. Please wait a moment.";
-    } else if (error.response.status === 429) {
-      error.message =
-        error.response.data?.message ||
-        "Request limit reached. Please wait a few moments before trying again.";
-    } else if (error.response.status >= 500) {
-      error.message =
-        error.response.data?.message ||
-        "Failed to generate your resume PDF. Please try again shortly.";
+        "Unable to connect to the server. Please check your connection and try again.";
+      return Promise.reject(error);
     }
+
+    // 2. Authentication
+    if (status === 401) {
+      error.message = "Your session has expired. Please sign in again.";
+      return Promise.reject(error);
+    }
+
+    // 3. Forbidden / IDOR
+    if (status === 403) {
+      error.message = "You don't have access to this resume.";
+      return Promise.reject(error);
+    }
+
+    // 4. Not Found
+    if (status === 404) {
+      error.message = isBlob
+        ? "Resume not found."
+        : serverMsg || "Requested resource not found.";
+      return Promise.reject(error);
+    }
+
+    // 5. Conflict (ATS resume still generating)
+    if (status === 409) {
+      error.message =
+        "Your ATS resume is still being prepared. Please try again shortly.";
+      return Promise.reject(error);
+    }
+
+    // 6. Unprocessable (ATS resume failed)
+    if (status === 422) {
+      error.message =
+        serverMsg || "ATS Resume couldn't be generated. Please try again.";
+      return Promise.reject(error);
+    }
+
+    // 7. Rate Limit & Gemini Quota
+    if (status === 429) {
+      if (serverMsg.toLowerCase().includes("quota")) {
+        error.isQuotaExhausted = true;
+        error.message =
+          "AI generation is temporarily unavailable because the current AI service quota has been reached. Please try again later.";
+      } else {
+        error.message =
+          "Request limit reached. Please wait a few moments before trying again.";
+      }
+      return Promise.reject(error);
+    }
+
+    // 8. Server Error (500, 502, 503)
+    if (status >= 500) {
+      if (isBlob) {
+        error.message =
+          "Unable to download the resume right now. Please try again.";
+      } else if (serverMsg.toLowerCase().includes("quota")) {
+        error.isQuotaExhausted = true;
+        error.message =
+          "AI generation is temporarily unavailable because the current AI service quota has been reached. Please try again later.";
+      } else if (
+        serverMsg.toLowerCase().includes("gemini") ||
+        serverMsg.toLowerCase().includes("demand") ||
+        serverMsg.toLowerCase().includes("overloaded")
+      ) {
+        error.message =
+          "AI generation is temporarily unavailable. Please try again later.";
+      } else {
+        error.message = "Something went wrong. Please try again.";
+      }
+      return Promise.reject(error);
+    }
+
+    // Fallback sanitation: never expose stack traces or raw technical strings
+    if (
+      serverMsg.includes("generativelanguage.googleapis.com") ||
+      serverMsg.includes("Mongo") ||
+      serverMsg.includes("CastError") ||
+      serverMsg.includes("node_modules") ||
+      serverMsg.includes("at ") ||
+      serverMsg.includes("ECONNREFUSED")
+    ) {
+      error.message = "Something went wrong. Please try again.";
+    }
+
     return Promise.reject(error);
   },
 );

@@ -13,11 +13,16 @@ api.interceptors.response.use(
   (error) => {
     if (!error.response) {
       error.message =
-        "Network connection error. Please check your internet connection.";
+        "Unable to connect to the server. Please check your connection and try again.";
+    } else if (error.response.status === 401) {
+      error.message =
+        error.response.data?.message || "Your session has expired. Please sign in again.";
     } else if (error.response.status === 429) {
       error.message =
         error.response.data?.message ||
         "Too many authentication attempts. Please try again in 15 minutes.";
+    } else if (error.response.status >= 500) {
+      error.message = "Something went wrong. Please try again.";
     }
     return Promise.reject(error);
   },

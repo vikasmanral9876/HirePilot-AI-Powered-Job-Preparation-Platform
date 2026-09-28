@@ -171,16 +171,39 @@ export const useInterview = () => {
     } catch (error) {
       console.error("Error generating interview report:", error);
       const rawMsg = error?.response?.data?.message || error?.message || "";
-      if (rawMsg.toLowerCase().includes("quota")) {
+      const isQuota =
+        error?.isQuotaExhausted ||
+        rawMsg.toLowerCase().includes("quota") ||
+        error?.response?.status === 429;
+
+      if (isQuota) {
         const friendlyError = new Error(
-          "Gemini API quota has been reached. Please try again later.",
+          "AI generation is temporarily unavailable. Please try again later.",
         );
+        friendlyError.isQuotaExhausted = true;
         friendlyError.response = {
+          status: 429,
           data: {
-            message: "Gemini API quota has been reached. Please try again later.",
+            message: "AI generation is temporarily unavailable. Please try again later.",
           },
         };
         throw friendlyError;
+      }
+
+      if (error?.response?.status === 401) {
+        const authError = new Error("Your session has expired. Please sign in again.");
+        authError.response = {
+          status: 401,
+          data: { message: "Your session has expired. Please sign in again." },
+        };
+        throw authError;
+      }
+
+      if (!error?.response) {
+        const netError = new Error(
+          "Unable to connect to the server. Please check your connection and try again.",
+        );
+        throw netError;
       }
 
       const isGeminiDemand =
@@ -188,22 +211,27 @@ export const useInterview = () => {
         rawMsg.toLowerCase().includes("demand") ||
         rawMsg.toLowerCase().includes("overloaded") ||
         rawMsg.toLowerCase().includes("503") ||
-        rawMsg.toLowerCase().includes("429") ||
         rawMsg.toLowerCase().includes("temporarily unavailable") ||
         rawMsg.toLowerCase().includes("resource_exhausted");
 
       if (isGeminiDemand) {
         const friendlyError = new Error(
-          "We couldn't generate your interview. Please try again.",
+          "AI generation is temporarily unavailable. Please try again later.",
         );
         friendlyError.response = {
           data: {
-            message: "We couldn't generate your interview. Please try again.",
+            message: "AI generation is temporarily unavailable. Please try again later.",
           },
         };
         throw friendlyError;
       }
-      throw error;
+
+      const fallbackError = new Error(
+        error?.response?.data?.message && !error.response.data.message.includes("at ")
+          ? error.response.data.message
+          : "We couldn't generate your interview. Please try again.",
+      );
+      throw fallbackError;
     } finally {
       setLoading(false);
     }

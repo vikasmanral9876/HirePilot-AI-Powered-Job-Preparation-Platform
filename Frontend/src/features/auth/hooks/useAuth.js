@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from "react";
 import { AuthContext } from "../auth.context";
 import { login, register, logout, getMe, googleAuth } from "../services/auth.api";
+import { clearStagedResume } from "../../interview/services/resumeStorage";
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -14,9 +15,11 @@ export const useAuth = () => {
   const handleLogin = async ({ email, password }) => {
     setLoading(true);
     setAuthError(null);
+    clearStagedResume();
     try {
       const data = await login({ email, password });
       if (data?.user) {
+        clearStagedResume();
         setUser(data.user);
         return { success: true, user: data.user };
       }
@@ -35,9 +38,11 @@ export const useAuth = () => {
   const handleGoogleLogin = async ({ idToken }) => {
     setLoading(true);
     setAuthError(null);
+    clearStagedResume();
     try {
       const data = await googleAuth({ idToken });
       if (data?.user) {
+        clearStagedResume();
         setUser(data.user);
         return { success: true, user: data.user };
       }
@@ -56,9 +61,11 @@ export const useAuth = () => {
   const handleRegister = async ({ username, email, password }) => {
     setLoading(true);
     setAuthError(null);
+    clearStagedResume();
     try {
       const data = await register({ username, email, password });
       if (data?.user) {
+        clearStagedResume();
         setUser(data.user);
         return { success: true, user: data.user };
       }
@@ -88,6 +95,7 @@ export const useAuth = () => {
 
   const handleLogout = async () => {
     setLoading(true);
+    clearStagedResume();
     try {
       await logout();
       try {
@@ -95,6 +103,7 @@ export const useAuth = () => {
       } catch (e) {
         console.error(e);
       }
+      clearStagedResume();
       setUser(null);
       return { success: true };
     } catch (err) {
@@ -104,6 +113,7 @@ export const useAuth = () => {
       } catch (e) {
         console.error(e);
       }
+      clearStagedResume();
       setUser(null);
       return { success: true };
     } finally {

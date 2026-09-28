@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "../../../components/ui/Icons";
 import PlanLoadingState from "../components/PlanLoadingState";
+import Toast from "../../../components/ui/Toast";
 
 
 const NAV_ITEMS = [
@@ -300,7 +301,15 @@ const Interview = () => {
           {/* ── ATS Resume Section ── */}
           <div className="ats-resume-nav-card">
             <div className="ats-resume-nav-card__header">
-              <span className="ats-resume-nav-card__title">ATS Resume</span>
+              <span className="ats-resume-nav-card__title">
+                {atsResumeStatus === "ready"
+                  ? "ATS Resume Ready"
+                  : atsResumeStatus === "generating"
+                  ? "Preparing your ATS-tailored resume..."
+                  : atsResumeStatus === "failed"
+                  ? "ATS Resume couldn't be generated."
+                  : "ATS Resume"}
+              </span>
               <span className={`ats-status-badge ats-status-badge--${atsResumeStatus}`}>
                 <span className="ats-status-dot" />
                 {atsResumeStatus === "generating"
@@ -315,13 +324,13 @@ const Interview = () => {
 
             <p className="ats-resume-nav-card__description">
               {atsResumeStatus === "generating" &&
-                "Preparing your ATS resume... Your resume is being tailored and formatted."}
+                "This is happening in the background. You can continue using HirePilot."}
               {atsResumeStatus === "ready" &&
-                "Your ATS-tailored resume is ready."}
+                "Your tailored resume is ready to download."}
               {atsResumeStatus === "failed" &&
-                (atsResumeError || "We couldn't generate your ATS resume.")}
+                (atsResumeError || "ATS resume couldn't be generated. Please try again.")}
               {atsResumeStatus === "not_started" &&
-                "Your ATS resume hasn't been generated yet."}
+                "Your tailored resume hasn't been generated yet."}
             </p>
 
             {atsResumeStatus === "generating" && (
@@ -329,9 +338,10 @@ const Interview = () => {
                 type="button"
                 className="button ats-resume-btn ats-resume-btn--generating"
                 disabled
+                aria-busy="true"
               >
                 <Loader2 size={15} className="spin-loader" />
-                <span>Generating...</span>
+                <span>Preparing...</span>
               </button>
             )}
 
@@ -341,6 +351,7 @@ const Interview = () => {
                 onClick={handleDownloadResume}
                 disabled={isDownloadingResume}
                 className="button primary-button ats-resume-btn ats-resume-btn--ready"
+                aria-busy={isDownloadingResume}
               >
                 {isDownloadingResume ? (
                   <>
@@ -350,7 +361,7 @@ const Interview = () => {
                 ) : (
                   <>
                     <Download size={15} />
-                    <span>Download ATS Resume</span>
+                    <span>Download ATS Tailored Resume</span>
                   </>
                 )}
               </button>
@@ -362,9 +373,10 @@ const Interview = () => {
                 onClick={handleRetryResume}
                 disabled={isRetryingResume}
                 className="button ats-resume-btn ats-resume-btn--retry"
+                aria-busy={isRetryingResume}
               >
                 <RotateCcw size={15} className={isRetryingResume ? "spin-loader" : ""} />
-                <span>{isRetryingResume ? "Starting..." : "Try Again"}</span>
+                <span>{isRetryingResume ? "Retrying..." : "Retry Generation"}</span>
               </button>
             )}
 
@@ -374,11 +386,12 @@ const Interview = () => {
                 onClick={handleRetryResume}
                 disabled={isRetryingResume}
                 className="button primary-button ats-resume-btn ats-resume-btn--start"
+                aria-busy={isRetryingResume}
               >
                 {isRetryingResume ? (
                   <>
                     <Loader2 size={15} className="spin-loader" />
-                    <span>Starting...</span>
+                    <span>Preparing...</span>
                   </>
                 ) : (
                   <>
@@ -576,43 +589,19 @@ const Interview = () => {
 
       {/* Toast Notifications */}
       {downloadSuccessMessage && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            background: "#10b981",
-            color: "#ffffff",
-            padding: "0.75rem 1.25rem",
-            borderRadius: "8px",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            zIndex: 9999,
-          }}
-        >
-          {downloadSuccessMessage}
-        </div>
+        <Toast
+          message={downloadSuccessMessage}
+          type="success"
+          onClose={() => setDownloadSuccessMessage("")}
+        />
       )}
 
       {downloadErrorMessage && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            background: "#ef4444",
-            color: "#ffffff",
-            padding: "0.75rem 1.25rem",
-            borderRadius: "8px",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            zIndex: 9999,
-          }}
-        >
-          {downloadErrorMessage}
-        </div>
+        <Toast
+          message={downloadErrorMessage}
+          type="error"
+          onClose={() => setDownloadErrorMessage("")}
+        />
       )}
     </div>
   );

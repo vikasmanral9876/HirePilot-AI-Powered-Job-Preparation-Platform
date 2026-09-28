@@ -117,10 +117,18 @@ const Settings = () => {
     }
   };
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   // Sign out confirmation
   const onConfirmLogout = async () => {
-    await handleLogout();
-    navigate("/login", { replace: true });
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await handleLogout();
+    } finally {
+      setIsLoggingOut(false);
+      navigate("/login", { replace: true });
+    }
   };
 
   return (
@@ -433,9 +441,10 @@ const Settings = () => {
                   type="button"
                   className="btn-danger"
                   onClick={onConfirmLogout}
+                  disabled={isLoggingOut}
                 >
                   <LogOut size={14} />
-                  <span>Confirm Sign Out</span>
+                  <span>{isLoggingOut ? "Signing Out..." : "Confirm Sign Out"}</span>
                 </button>
               </div>
             </div>

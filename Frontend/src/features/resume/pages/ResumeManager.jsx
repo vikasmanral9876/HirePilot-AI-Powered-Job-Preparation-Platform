@@ -25,6 +25,8 @@ import {
   RotateCcw,
   Loader2,
 } from "../../../components/ui/Icons";
+import { getAtsResumeStatus } from "../../interview/services/interview.api";
+import Toast from "../../../components/ui/Toast";
 
 const ResumeManager = () => {
   const {
@@ -39,6 +41,7 @@ const ResumeManager = () => {
   const [activeReportDetails, setActiveReportDetails] = useState(null);
   const [showTextPreview, setShowTextPreview] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [downloadSuccessMessage, setDownloadSuccessMessage] = useState("");
   const [downloadErrorMessage, setDownloadErrorMessage] = useState("");
 
@@ -51,17 +54,24 @@ const ResumeManager = () => {
     getReports();
   }, []);
 
-  // Sync staged resume file from context or IndexedDB cache
+  // Sync staged resume file from in-memory context only (never restore across page refreshes)
   useEffect(() => {
-    if (stagedResumeFile && !selectedFile) {
+    const isReload = (() => {
+      try {
+        const navEntry = window.performance?.getEntriesByType?.("navigation")?.[0];
+        if (navEntry) return navEntry.type === "reload";
+        return window.performance?.navigation?.type === 1;
+      } catch (e) {
+        return false;
+      }
+    })();
+
+    if (isReload) {
+      setSelectedFile(null);
+      setStagedResumeFile(null);
+      clearStagedResume();
+    } else if (stagedResumeFile && !selectedFile) {
       setSelectedFile(stagedResumeFile);
-    } else if (!selectedFile) {
-      getStagedResume().then((file) => {
-        if (file) {
-          setSelectedFile(file);
-          setStagedResumeFile(file);
-        }
-      });
     }
   }, [stagedResumeFile]);
 
@@ -88,6 +98,39 @@ const ResumeManager = () => {
       isCurrent = false;
     };
   }, [reports]);
+
+  // Background polling if active resume is in generating state
+  useEffect(() => {
+    if (activeReportDetails?.atsResume?.status !== "generating" || !activeReportDetails?._id) {
+      return;
+    }
+
+    const timer = setInterval(async () => {
+      try {
+        const res = await getAtsResumeStatus(activeReportDetails._id);
+        if (res?.status && res.status !== "generating") {
+          setActiveReportDetails((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  atsResume: {
+                    ...(prev.atsResume || {}),
+                    status: res.status,
+                    generatedAt: res.generatedAt,
+                    errorMessage: res.errorMessage,
+                  },
+                }
+              : prev
+          );
+          getReports();
+        }
+      } catch (err) {
+        // ignore
+      }
+    }, 3500);
+
+    return () => clearInterval(timer);
+  }, [activeReportDetails?.atsResume?.status, activeReportDetails?._id]);
 
   // File dropzone handlers (syncing to context & IndexedDB)
   const handleFileChange = (e) => {
@@ -147,13 +190,11 @@ const ResumeManager = () => {
     try {
       await getResumePdf(reportId);
       setDownloadSuccessMessage("ATS Resume downloaded successfully");
-      setTimeout(() => setDownloadSuccessMessage(""), 4000);
     } catch (err) {
       console.error("Error downloading resume PDF:", err);
       setDownloadErrorMessage(
         err?.message || "Failed to download your resume PDF. Please try again shortly."
       );
-      setTimeout(() => setDownloadErrorMessage(""), 4000);
     } finally {
       setIsDownloading(false);
     }
@@ -161,18 +202,33 @@ const ResumeManager = () => {
 
   const handleRetry = async () => {
     const reportId = activeReportDetails?._id || reports[0]?._id;
-    if (!reportId) return;
+    if (!reportId || isRetrying) return;
+    setIsRetrying(true);
+    setDownloadSuccessMessage("");
+    setDownloadErrorMessage("");
     try {
       await retryResume(reportId);
       setDownloadSuccessMessage("Preparing ATS resume in background...");
+      setActiveReportDetails((prev) =>
+        prev
+          ? {
+              ...prev,
+              atsResume: {
+                ...(prev.atsResume || {}),
+                status: "generating",
+                errorMessage: null,
+              },
+            }
+          : prev
+      );
       getReports();
-      setTimeout(() => setDownloadSuccessMessage(""), 4000);
     } catch (err) {
       console.error("Error retrying resume:", err);
       setDownloadErrorMessage(
         err?.message || "Failed to restart resume generation."
       );
-      setTimeout(() => setDownloadErrorMessage(""), 4000);
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -191,43 +247,19 @@ const ResumeManager = () => {
     <div className="resume-page">
       {/* Toast Notifications */}
       {downloadSuccessMessage && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            background: "#10b981",
-            color: "#ffffff",
-            padding: "0.75rem 1.25rem",
-            borderRadius: "8px",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            zIndex: 9999,
-          }}
-        >
-          {downloadSuccessMessage}
-        </div>
+        <Toast
+          message={downloadSuccessMessage}
+          type="success"
+          onClose={() => setDownloadSuccessMessage("")}
+        />
       )}
 
       {downloadErrorMessage && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            background: "#ef4444",
-            color: "#ffffff",
-            padding: "0.75rem 1.25rem",
-            borderRadius: "8px",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            zIndex: 9999,
-          }}
-        >
-          {downloadErrorMessage}
-        </div>
+        <Toast
+          message={downloadErrorMessage}
+          type="error"
+          onClose={() => setDownloadErrorMessage("")}
+        />
       )}
 
       {/* ── Page Header ── */}
@@ -320,33 +352,75 @@ const ResumeManager = () => {
                       disabled
                       style={{ opacity: 0.75, cursor: "not-allowed" }}
                       title="ATS resume is currently preparing in the background"
+                      aria-busy="true"
                     >
                       <Loader2 size={16} className="spin-loader" />
                       <span>Preparing ATS Resume...</span>
+                    </button>
+                  ) : activeReportDetails?.atsResume?.status === "ready" ? (
+                    <button
+                      type="button"
+                      className="action-btn action-btn--primary"
+                      onClick={handleDownload}
+                      disabled={isDownloading}
+                      aria-busy={isDownloading}
+                    >
+                      {isDownloading ? (
+                        <>
+                          <Loader2 size={16} className="spin-loader" />
+                          <span>Downloading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download size={16} />
+                          <span>Download ATS Tailored PDF</span>
+                        </>
+                      )}
                     </button>
                   ) : activeReportDetails?.atsResume?.status === "failed" ? (
                     <button
                       type="button"
                       className="action-btn"
                       onClick={handleRetry}
+                      disabled={isRetrying}
+                      aria-busy={isRetrying}
                       style={{
                         color: "#f87171",
                         borderColor: "rgba(239, 68, 68, 0.3)",
                       }}
                       title="Resume generation failed. Click to retry"
                     >
-                      <RotateCcw size={16} />
-                      <span>Retry Generation</span>
+                      {isRetrying ? (
+                        <>
+                          <Loader2 size={16} className="spin-loader" />
+                          <span>Retrying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw size={16} />
+                          <span>Retry Generation</span>
+                        </>
+                      )}
                     </button>
                   ) : (
                     <button
                       type="button"
                       className="action-btn action-btn--primary"
-                      onClick={handleDownload}
-                      disabled={isDownloading}
+                      onClick={handleRetry}
+                      disabled={isRetrying}
+                      aria-busy={isRetrying}
                     >
-                      <Download size={16} />
-                      <span>Download ATS Tailored PDF</span>
+                      {isRetrying ? (
+                        <>
+                          <Loader2 size={16} className="spin-loader" />
+                          <span>Preparing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} />
+                          <span>Generate ATS Resume</span>
+                        </>
+                      )}
                     </button>
                   )}
                 </div>
@@ -371,9 +445,9 @@ const ResumeManager = () => {
               <div className="dash-empty-state__icon">
                 <FileText size={26} />
               </div>
-              <h3>No active resume registered</h3>
+              <h3>No resume uploaded yet.</h3>
               <p>
-                Upload your resume below to activate your candidate profile and generate personalized interview questions with tailored roadmaps.
+                Upload your resume to analyze it and create ATS-tailored versions.
               </p>
             </div>
           )}

@@ -44,10 +44,18 @@ const UserDropdown = () => {
     };
   }, [isOpen]);
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const onLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
     setIsOpen(false);
-    await handleLogout();
-    navigate("/login", { replace: true });
+    try {
+      await handleLogout();
+    } finally {
+      setIsLoggingOut(false);
+      navigate("/login", { replace: true });
+    }
   };
 
   // Get user initials
@@ -164,9 +172,10 @@ const UserDropdown = () => {
             className="menu-item menu-item--danger"
             role="menuitem"
             onClick={onLogout}
+            disabled={isLoggingOut}
           >
             <LogOut size={16} />
-            <span>Sign Out</span>
+            <span>{isLoggingOut ? "Signing Out..." : "Sign Out"}</span>
           </button>
         </div>
       )}

@@ -3,6 +3,8 @@ import { useAuth } from "../../auth/hooks/useAuth";
 import { useInterview } from "../../interview/hooks/useInterview";
 import { getInterviewReportById } from "../../interview/services/interview.api";
 import { usePreparationProgress } from "../hooks/usePreparationProgress";
+import { getAtsResumeStatus } from "../../interview/services/interview.api";
+import Toast from "../../../components/ui/Toast";
 import WelcomeBanner from "../components/WelcomeBanner";
 import StatsGrid from "../components/StatsGrid";
 import RecentInterviews from "../components/RecentInterviews";
@@ -16,7 +18,8 @@ const Dashboard = () => {
   const { reports, getReports, getResumePdf, retryResume, loading } = useInterview();
 
   const [activeDetailedReport, setActiveDetailedReport] = useState(null);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [retryingId, setRetryingId] = useState(null);
   const [downloadSuccessMessage, setDownloadSuccessMessage] = useState("");
   const [downloadErrorMessage, setDownloadErrorMessage] = useState("");
 
@@ -28,6 +31,33 @@ const Dashboard = () => {
   useEffect(() => {
     getReports();
   }, []);
+
+  // Background polling for any reports currently in "generating" state
+  useEffect(() => {
+    const generatingReports = reports.filter(
+      (r) => r.atsResume?.status === "generating"
+    );
+    if (generatingReports.length === 0) return;
+
+    const timer = setInterval(async () => {
+      let shouldRefresh = false;
+      for (const r of generatingReports) {
+        try {
+          const statusRes = await getAtsResumeStatus(r._id);
+          if (statusRes?.status && statusRes.status !== "generating") {
+            shouldRefresh = true;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      if (shouldRefresh) {
+        getReports();
+      }
+    }, 3500);
+
+    return () => clearInterval(timer);
+  }, [reports]);
 
   // Fetch full details of the latest plan to populate the roadmap checklist
   useEffect(() => {
@@ -54,8 +84,8 @@ const Dashboard = () => {
   }, [reports]);
 
   const handleDownloadResume = async (reportId) => {
-    if (!reportId || isDownloading) return;
-    setIsDownloading(true);
+    if (!reportId || downloadingId === reportId) return;
+    setDownloadingId(reportId);
     setDownloadSuccessMessage("");
     setDownloadErrorMessage("");
     try {
@@ -64,73 +94,52 @@ const Dashboard = () => {
         reportId,
       });
       setDownloadSuccessMessage("ATS Resume downloaded successfully");
-      setTimeout(() => setDownloadSuccessMessage(""), 4000);
     } catch (err) {
       console.error("Error downloading resume:", err);
       setDownloadErrorMessage(
         err?.message || "Failed to download your resume PDF. Please try again shortly."
       );
-      setTimeout(() => setDownloadErrorMessage(""), 4000);
     } finally {
-      setIsDownloading(false);
+      setDownloadingId(null);
     }
   };
 
   const handleRetryResume = async (reportId) => {
-    if (!reportId) return;
+    if (!reportId || retryingId === reportId) return;
+    setRetryingId(reportId);
+    setDownloadSuccessMessage("");
+    setDownloadErrorMessage("");
     try {
       await retryResume(reportId);
+      setDownloadSuccessMessage("Preparing ATS resume in background...");
       getReports();
     } catch (err) {
       console.error("Error retrying resume generation:", err);
       setDownloadErrorMessage(
         err?.message || "Failed to restart resume generation."
       );
-      setTimeout(() => setDownloadErrorMessage(""), 4000);
+    } finally {
+      setRetryingId(null);
     }
   };
 
   return (
     <div className="dashboard-page">
-      {/* Download Alert Toasts */}
+      {/* Toast Notifications */}
       {downloadSuccessMessage && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            background: "#10b981",
-            color: "#ffffff",
-            padding: "0.75rem 1.25rem",
-            borderRadius: "8px",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            zIndex: 9999,
-          }}
-        >
-          {downloadSuccessMessage}
-        </div>
+        <Toast
+          message={downloadSuccessMessage}
+          type="success"
+          onClose={() => setDownloadSuccessMessage("")}
+        />
       )}
 
       {downloadErrorMessage && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "24px",
-            right: "24px",
-            background: "#ef4444",
-            color: "#ffffff",
-            padding: "0.75rem 1.25rem",
-            borderRadius: "8px",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            zIndex: 9999,
-          }}
-        >
-          {downloadErrorMessage}
-        </div>
+        <Toast
+          message={downloadErrorMessage}
+          type="error"
+          onClose={() => setDownloadErrorMessage("")}
+        />
       )}
 
       {/* 1. Welcome Header & Primary CTA */}
@@ -147,7 +156,8 @@ const Dashboard = () => {
             reports={reports}
             onDownloadResume={handleDownloadResume}
             onRetryResume={handleRetryResume}
-            isDownloading={isDownloading}
+            downloadingId={downloadingId}
+            retryingId={retryingId}
             loading={loading}
           />
 

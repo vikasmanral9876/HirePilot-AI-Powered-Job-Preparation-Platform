@@ -9,13 +9,15 @@ import {
   Plus,
   Loader2,
   RotateCcw,
+  Sparkles,
 } from "../../../components/ui/Icons";
 
 const RecentInterviews = ({
   reports = [],
   onDownloadResume,
   onRetryResume,
-  isDownloading,
+  downloadingId = null,
+  retryingId = null,
   loading = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -110,9 +112,31 @@ const RecentInterviews = ({
                       disabled
                       title="ATS resume is currently preparing in the background"
                       style={{ opacity: 0.75, cursor: "not-allowed" }}
+                      aria-busy="true"
                     >
                       <Loader2 size={14} className="spin-loader" />
                       <span>Preparing...</span>
+                    </button>
+                  ) : report.atsResume?.status === "ready" ? (
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={() => onDownloadResume(report._id)}
+                      title="Download Tailored ATS Resume PDF"
+                      disabled={downloadingId === report._id}
+                      aria-busy={downloadingId === report._id}
+                    >
+                      {downloadingId === report._id ? (
+                        <>
+                          <Loader2 size={14} className="spin-loader" />
+                          <span>Downloading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download size={14} />
+                          <span>Download Resume</span>
+                        </>
+                      )}
                     </button>
                   ) : report.atsResume?.status === "failed" ? (
                     <button
@@ -124,24 +148,49 @@ const RecentInterviews = ({
                           : onDownloadResume(report._id)
                       }
                       title="Resume generation failed. Click to retry"
+                      disabled={retryingId === report._id}
+                      aria-busy={retryingId === report._id}
                       style={{
                         color: "#f87171",
                         borderColor: "rgba(239, 68, 68, 0.3)",
                       }}
                     >
-                      <RotateCcw size={14} />
-                      <span>Retry</span>
+                      {retryingId === report._id ? (
+                        <>
+                          <Loader2 size={14} className="spin-loader" />
+                          <span>Retrying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw size={14} />
+                          <span>Retry</span>
+                        </>
+                      )}
                     </button>
                   ) : (
                     <button
                       type="button"
                       className="action-btn"
-                      onClick={() => onDownloadResume(report._id)}
-                      title="Download Tailored ATS Resume PDF"
-                      disabled={isDownloading}
+                      onClick={() =>
+                        onRetryResume
+                          ? onRetryResume(report._id)
+                          : onDownloadResume(report._id)
+                      }
+                      title="Generate Tailored ATS Resume"
+                      disabled={retryingId === report._id}
+                      aria-busy={retryingId === report._id}
                     >
-                      <Download size={14} />
-                      <span>Resume</span>
+                      {retryingId === report._id ? (
+                        <>
+                          <Loader2 size={14} className="spin-loader" />
+                          <span>Preparing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={14} />
+                          <span>Generate Resume</span>
+                        </>
+                      )}
                     </button>
                   )}
 
