@@ -51,6 +51,7 @@ const Home = () => {
   });
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  // eslint-disable-next-line no-unused-vars
   const [isQuotaError, setIsQuotaError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successToast, setSuccessToast] = useState("");
