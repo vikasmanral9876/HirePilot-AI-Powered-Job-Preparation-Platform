@@ -10,11 +10,60 @@ export const usePreparationProgress = (activeReport) => {
   const { user } = useAuth();
   const userId = user?.id || user?._id || user?.email || "anonymous";
   const reportId = activeReport?._id;
-  const storageKey = reportId ? `hirepilot_prep_${userId}_${reportId}` : null;
+  const storageKey = reportId
+    ? `hirepilot_prep_${userId}_${reportId}`
+    : null;
   const activityKey = `hirepilot_activity_log_${userId}`;
 
-  const [completedTasks, setCompletedTasks] = useState([]);
-  const [activityLog, setActivityLog] = useState([]);
+  const [completedTasks, setCompletedTasks] = useState(() => {
+    if (!storageKey) return [];
+
+    try {
+      const stored = localStorage.getItem(storageKey);
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      console.error("Failed to load preparation progress:", e);
+      return [];
+    }
+  });
+
+  const [activityLog, setActivityLog] = useState(() => {
+    try {
+      const storedActivities = localStorage.getItem(activityKey);
+
+      if (!storedActivities) return [];
+
+      const parsed = JSON.parse(storedActivities);
+
+      if (!Array.isArray(parsed)) return [];
+
+      // Deduplicate by taskId or message so any past duplicated entries are cleaned up
+      const seen = new Set();
+      const cleanActivities = [];
+
+      for (const item of parsed) {
+        const key = item.taskId
+          ? `task_${item.taskId}`
+          : item.message;
+
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          cleanActivities.push(item);
+        }
+      }
+
+      // Persist the cleaned version
+      localStorage.setItem(
+        activityKey,
+        JSON.stringify(cleanActivities)
+      );
+
+      return cleanActivities;
+    } catch (e) {
+      console.error("Failed to load activity log:", e);
+      return [];
+    }
+  });
 
   // Clean up any legacy un-scoped activity log to prevent data cross-contamination
   useEffect(() => {
@@ -25,52 +74,60 @@ export const usePreparationProgress = (activeReport) => {
     }
   }, []);
 
-  // Load completed tasks for the current user's active report
+  // Reload completed tasks when the active report changes
   useEffect(() => {
-    if (!storageKey) {
-      setCompletedTasks([]);
-      return;
-    }
+    if (!storageKey) return;
+
     try {
       const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        setCompletedTasks(JSON.parse(stored));
-      } else {
-        setCompletedTasks([]);
-      }
+      const tasks = stored ? JSON.parse(stored) : [];
+
+      setCompletedTasks(Array.isArray(tasks) ? tasks : []);
     } catch (e) {
-      console.error("Failed to load preparation progress:", e);
+      console.error("Failed to reload preparation progress:", e);
       setCompletedTasks([]);
     }
   }, [storageKey]);
 
-  // Load user-scoped persistent activity log with automatic deduplication
+  // Reload activity log when the authenticated user changes
   useEffect(() => {
     try {
       const storedActivities = localStorage.getItem(activityKey);
-      if (storedActivities) {
-        const parsed = JSON.parse(storedActivities);
-        if (Array.isArray(parsed)) {
-          // Deduplicate by taskId or message so any past duplicated entries are cleaned up
-          const seen = new Set();
-          const cleanActivities = [];
-          for (const item of parsed) {
-            const key = item.taskId ? `task_${item.taskId}` : item.message;
-            if (key && !seen.has(key)) {
-              seen.add(key);
-              cleanActivities.push(item);
-            }
-          }
-          setActivityLog(cleanActivities);
-          localStorage.setItem(activityKey, JSON.stringify(cleanActivities));
-        } else {
-          setActivityLog([]);
-        }
-      } else {
+
+      if (!storedActivities) {
         setActivityLog([]);
+        return;
       }
+
+      const parsed = JSON.parse(storedActivities);
+
+      if (!Array.isArray(parsed)) {
+        setActivityLog([]);
+        return;
+      }
+
+      const seen = new Set();
+      const cleanActivities = [];
+
+      for (const item of parsed) {
+        const key = item.taskId
+          ? `task_${item.taskId}`
+          : item.message;
+
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          cleanActivities.push(item);
+        }
+      }
+
+      setActivityLog(cleanActivities);
+
+      localStorage.setItem(
+        activityKey,
+        JSON.stringify(cleanActivities)
+      );
     } catch (e) {
-      console.error("Failed to load activity log:", e);
+      console.error("Failed to reload activity log:", e);
       setActivityLog([]);
     }
   }, [activityKey]);
@@ -81,24 +138,33 @@ export const usePreparationProgress = (activeReport) => {
         id: metadata.taskId
           ? `task_${metadata.taskId}`
           : `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-        type, // 'plan_created' | 'task_completed' | 'resume_downloaded'
+        type,
         message,
         timestamp: new Date().toISOString(),
         ...metadata,
       };
+
       setActivityLog((prev) => {
-        // Remove previous entry with same taskId or identical message to prevent duplicates
+        // Remove previous entry with same taskId or identical message
         const filtered = prev.filter(
           (item) =>
-            (metadata.taskId ? item.taskId !== metadata.taskId : true) &&
+            (metadata.taskId
+              ? item.taskId !== metadata.taskId
+              : true) &&
             item.message !== message
         );
-        const updated = [newEntry, ...filtered].slice(0, 20); // Keep last 20
+
+        const updated = [newEntry, ...filtered].slice(0, 20);
+
         try {
-          localStorage.setItem(activityKey, JSON.stringify(updated));
+          localStorage.setItem(
+            activityKey,
+            JSON.stringify(updated)
+          );
         } catch (e) {
           console.error("Failed to save activity:", e);
         }
+
         return updated;
       });
     },
@@ -110,6 +176,7 @@ export const usePreparationProgress = (activeReport) => {
       if (!storageKey) return;
 
       const isCompleted = completedTasks.includes(taskId);
+
       const updated = isCompleted
         ? completedTasks.filter((id) => id !== taskId)
         : [...completedTasks, taskId];
@@ -117,7 +184,10 @@ export const usePreparationProgress = (activeReport) => {
       setCompletedTasks(updated);
 
       try {
-        localStorage.setItem(storageKey, JSON.stringify(updated));
+        localStorage.setItem(
+          storageKey,
+          JSON.stringify(updated)
+        );
       } catch (e) {
         console.error("Failed to save task status:", e);
       }
@@ -125,7 +195,7 @@ export const usePreparationProgress = (activeReport) => {
       const taskSummary = `Completed task: "${taskDescription}"`;
 
       if (!isCompleted) {
-        // Task was completed: Add/update single activity entry with fresh timestamp
+        // Task was completed: Add/update a single activity entry
         const newEntry = {
           id: `task_${taskId}`,
           type: "task_completed",
@@ -137,34 +207,54 @@ export const usePreparationProgress = (activeReport) => {
         };
 
         setActivityLog((prev) => {
-          // Remove any existing entry for this specific task or message
           const filtered = prev.filter(
-            (item) => item.taskId !== taskId && item.message !== taskSummary
+            (item) =>
+              item.taskId !== taskId &&
+              item.message !== taskSummary
           );
+
           const updatedLog = [newEntry, ...filtered].slice(0, 20);
+
           try {
-            localStorage.setItem(activityKey, JSON.stringify(updatedLog));
+            localStorage.setItem(
+              activityKey,
+              JSON.stringify(updatedLog)
+            );
           } catch (e) {
             console.error("Failed to save activity log:", e);
           }
+
           return updatedLog;
         });
       } else {
-        // Task was unchecked: Remove completion activity so it doesn't show as finished
+        // Task was unchecked: Remove its completion activity
         setActivityLog((prev) => {
           const updatedLog = prev.filter(
-            (item) => item.taskId !== taskId && item.message !== taskSummary
+            (item) =>
+              item.taskId !== taskId &&
+              item.message !== taskSummary
           );
+
           try {
-            localStorage.setItem(activityKey, JSON.stringify(updatedLog));
+            localStorage.setItem(
+              activityKey,
+              JSON.stringify(updatedLog)
+            );
           } catch (e) {
             console.error("Failed to save activity log:", e);
           }
+
           return updatedLog;
         });
       }
     },
-    [storageKey, completedTasks, activityKey, reportId, activeReport?.title]
+    [
+      storageKey,
+      completedTasks,
+      activityKey,
+      reportId,
+      activeReport?.title,
+    ]
   );
 
   return {

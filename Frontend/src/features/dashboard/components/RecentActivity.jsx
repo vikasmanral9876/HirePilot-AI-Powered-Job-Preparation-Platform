@@ -1,4 +1,3 @@
-import React from "react";
 import { Clock } from "../../../components/ui/Icons";
 
 const RecentActivity = ({ reports = [], activityLog = [] }) => {
@@ -49,7 +48,7 @@ const RecentActivity = ({ reports = [], activityLog = [] }) => {
         day: "numeric",
         ...(isSameYear ? {} : { year: "numeric" }),
       }).format(past);
-    } catch (e) {
+    } catch {
       return "Recently";
     }
   };

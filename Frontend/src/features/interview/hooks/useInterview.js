@@ -7,7 +7,7 @@ import {
   retryAtsResume,
   deleteInterviewReport,
 } from "../services/interview.api";
-import { useContext, useEffect, useState, useCallback, useRef } from "react";
+import { useContext, useEffect, useState, useRef } from "react";
 import { InterviewContext } from "../interview.context";
 import { useParams } from "react-router";
 
@@ -171,26 +171,50 @@ export const useInterview = () => {
     } catch (error) {
       console.error("Error generating interview report:", error);
       const rawMsg = error?.response?.data?.message || error?.message || "";
+      const status = error?.response?.status;
+
+      // 1. Genuine Quota Exhaustion (explicit quota indicator in message or flag)
       const isQuota =
-        error?.isQuotaExhausted ||
-        rawMsg.toLowerCase().includes("quota") ||
-        error?.response?.status === 429;
+        Boolean(error?.isQuotaExhausted || error?.response?.data?.isQuotaExhausted) ||
+        rawMsg.toLowerCase().includes("quota");
 
       if (isQuota) {
         const friendlyError = new Error(
-          "AI generation is temporarily unavailable. Please try again later.",
+          "AI generation is temporarily unavailable because the current AI service quota has been reached. Please try again later.",
         );
         friendlyError.isQuotaExhausted = true;
         friendlyError.response = {
           status: 429,
           data: {
-            message: "AI generation is temporarily unavailable. Please try again later.",
+            message:
+              "AI generation is temporarily unavailable because the current AI service quota has been reached. Please try again later.",
           },
         };
         throw friendlyError;
       }
 
-      if (error?.response?.status === 401) {
+      // 2. Rate limiting / Throttling (or undetermined 429 cause)
+      if (status === 429) {
+        const isExplicitRateLimit =
+          rawMsg.toLowerCase().includes("rate limit") ||
+          rawMsg.toLowerCase().includes("too many requests") ||
+          rawMsg.toLowerCase().includes("throttl");
+
+        const rateLimitMsg = isExplicitRateLimit && rawMsg
+          ? rawMsg
+          : "AI service is temporarily busy due to rate limits. Please try again in a few moments.";
+
+        const rateLimitError = new Error(rateLimitMsg);
+        rateLimitError.isRateLimited = true;
+        rateLimitError.response = {
+          status: 429,
+          data: { message: rateLimitMsg },
+        };
+        throw rateLimitError;
+      }
+
+      // 3. Authentication
+      if (status === 401) {
         const authError = new Error("Your session has expired. Please sign in again.");
         authError.response = {
           status: 401,
@@ -199,6 +223,7 @@ export const useInterview = () => {
         throw authError;
       }
 
+      // 4. Network failure
       if (!error?.response) {
         const netError = new Error(
           "Unable to connect to the server. Please check your connection and try again.",
@@ -206,26 +231,30 @@ export const useInterview = () => {
         throw netError;
       }
 
+      // 5. Existing 503 / High demand handling (preserved)
       const isGeminiDemand =
         rawMsg.toLowerCase().includes("gemini") ||
         rawMsg.toLowerCase().includes("demand") ||
         rawMsg.toLowerCase().includes("overloaded") ||
         rawMsg.toLowerCase().includes("503") ||
         rawMsg.toLowerCase().includes("temporarily unavailable") ||
-        rawMsg.toLowerCase().includes("resource_exhausted");
+        rawMsg.toLowerCase().includes("resource_exhausted") ||
+        status === 503;
 
       if (isGeminiDemand) {
         const friendlyError = new Error(
-          "AI generation is temporarily unavailable. Please try again later.",
+          "AI generation is temporarily unavailable due to high demand. Please try again later.",
         );
         friendlyError.response = {
+          status: 503,
           data: {
-            message: "AI generation is temporarily unavailable. Please try again later.",
+            message: "AI generation is temporarily unavailable due to high demand. Please try again later.",
           },
         };
         throw friendlyError;
       }
 
+      // 6. Generic Fallback
       const fallbackError = new Error(
         error?.response?.data?.message && !error.response.data.message.includes("at ")
           ? error.response.data.message

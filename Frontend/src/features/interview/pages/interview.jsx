@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import "../style/interview.scss";
 import { useInterview } from "../hooks/useInterview.js";
 import { useParams, useNavigate, useLocation } from "react-router";
@@ -8,8 +8,6 @@ import {
   Loader2,
   RotateCcw,
   Sparkles,
-  CheckCircle2,
-  AlertCircle,
 } from "../../../components/ui/Icons";
 import PlanLoadingState from "../components/PlanLoadingState";
 import Toast from "../../../components/ui/Toast";

@@ -89,7 +89,7 @@ export async function getMe() {
   try {
     const response = await api.get("/api/auth/get-me");
     return response.data;
-  } catch (err) {
+  } catch {
     // 401 is expected if not logged in
     return null;
   }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router";
 import { useInterview } from "../hooks/useInterview";
 import "../style/history.scss";
@@ -15,8 +15,6 @@ import {
   Layers,
   X,
   Trash2,
-  CheckCircle2,
-  AlertCircle,
   Loader2,
   Sparkles,
 } from "../../../components/ui/Icons";
@@ -65,8 +63,8 @@ const InterviewHistory = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
-  const [downloadingId, setDownloadingId] = useState(null);
-  const [retryingId, setRetryingId] = useState(null);
+  const [downloadingIds, setDownloadingIds] = useState(() => new Set());
+  const [retryingIds, setRetryingIds] = useState(() => new Set());
   const [deleteModalPlan, setDeleteModalPlan] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [toast, setToast] = useState({ message: "", type: "info" });
@@ -90,7 +88,7 @@ const InterviewHistory = () => {
           if (res?.status && res.status !== "generating") {
             shouldRefresh = true;
           }
-        } catch (e) {
+        } catch {
           // ignore
         }
       }
@@ -124,8 +122,8 @@ const InterviewHistory = () => {
   };
 
   const handleDownload = async (reportId) => {
-    if (!reportId || downloadingId === reportId) return;
-    setDownloadingId(reportId);
+    if (!reportId || downloadingIds.has(reportId)) return;
+    setDownloadingIds((prev) => new Set(prev).add(reportId));
     try {
       await getResumePdf(reportId);
       setToast({
@@ -139,13 +137,17 @@ const InterviewHistory = () => {
         type: "error",
       });
     } finally {
-      setDownloadingId(null);
+      setDownloadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(reportId);
+        return next;
+      });
     }
   };
 
   const handleRetry = async (reportId) => {
-    if (!reportId || retryingId === reportId) return;
-    setRetryingId(reportId);
+    if (!reportId || retryingIds.has(reportId)) return;
+    setRetryingIds((prev) => new Set(prev).add(reportId));
     try {
       await retryResume(reportId);
       setToast({
@@ -160,7 +162,11 @@ const InterviewHistory = () => {
         type: "error",
       });
     } finally {
-      setRetryingId(null);
+      setRetryingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(reportId);
+        return next;
+      });
     }
   };
 
@@ -238,7 +244,7 @@ const InterviewHistory = () => {
         day: "numeric",
         year: "numeric",
       }).format(new Date(dateStr));
-    } catch (e) {
+    } catch {
       return "Recently";
     }
   };
@@ -435,6 +441,8 @@ const InterviewHistory = () => {
                   {filteredAndSortedReports.map((report) => {
                     const { role, company } = parseRoleAndCompany(report.title);
                     const status = getStatus(report.matchScore);
+                    const isDownloading = downloadingIds.has(report._id);
+                    const isRetrying = retryingIds.has(report._id);
                     const scoreClass =
                       report.matchScore >= 80
                         ? "score-badge--high"
@@ -517,10 +525,10 @@ const InterviewHistory = () => {
                                 className="row-btn"
                                 onClick={() => handleDownload(report._id)}
                                 title="Download tailored ATS Resume"
-                                disabled={downloadingId === report._id}
-                                aria-busy={downloadingId === report._id}
+                                disabled={isDownloading}
+                                aria-busy={isDownloading}
                               >
-                                {downloadingId === report._id ? (
+                                {isDownloading ? (
                                   <>
                                     <Loader2 size={13} className="spin-loader" />
                                     <span>Downloading...</span>
@@ -538,11 +546,11 @@ const InterviewHistory = () => {
                                 className="row-btn"
                                 onClick={() => handleRetry(report._id)}
                                 title="Resume generation failed. Click to retry"
-                                disabled={retryingId === report._id}
-                                aria-busy={retryingId === report._id}
+                                disabled={isRetrying}
+                                aria-busy={isRetrying}
                                 style={{ color: "#f87171" }}
                               >
-                                {retryingId === report._id ? (
+                                {isRetrying ? (
                                   <>
                                     <Loader2 size={13} className="spin-loader" />
                                     <span>Retrying...</span>
@@ -560,10 +568,10 @@ const InterviewHistory = () => {
                                 className="row-btn"
                                 onClick={() => handleRetry(report._id)}
                                 title="Generate tailored ATS resume"
-                                disabled={retryingId === report._id}
-                                aria-busy={retryingId === report._id}
+                                disabled={isRetrying}
+                                aria-busy={isRetrying}
                               >
-                                {retryingId === report._id ? (
+                                {isRetrying ? (
                                   <>
                                     <Loader2 size={13} className="spin-loader" />
                                     <span>Preparing...</span>

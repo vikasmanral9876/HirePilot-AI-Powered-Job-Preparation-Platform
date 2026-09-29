@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { useInterview } from "../../interview/hooks/useInterview";
@@ -6,19 +6,16 @@ import { getInterviewReportById } from "../../interview/services/interview.api";
 import "../progress.scss";
 import {
   BarChart2,
-  TrendingUp,
   Target,
   Code,
   Users,
   MessageSquare,
   Clock,
   CheckCircle2,
-  AlertCircle,
   Plus,
   Sparkles,
   Layers,
-  Award,
-  ChevronRight,
+  Award
 } from "../../../components/ui/Icons";
 
 const ProgressAnalytics = () => {
@@ -29,7 +26,6 @@ const ProgressAnalytics = () => {
   // Selected report for deep inspection
   const [selectedReportId, setSelectedReportId] = useState("");
   const [detailedReport, setDetailedReport] = useState(null);
-  const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Completed tasks from localStorage for the active plan
   const [completedTasks, setCompletedTasks] = useState([]);
@@ -56,7 +52,6 @@ const ProgressAnalytics = () => {
     }
 
     const fetchDetails = async () => {
-      setLoadingDetails(true);
       try {
         const res = await getInterviewReportById(selectedReportId);
         if (isCurrent && res?.interviewReport) {
@@ -64,8 +59,6 @@ const ProgressAnalytics = () => {
         }
       } catch (err) {
         console.error("Failed to load interview report details:", err);
-      } finally {
-        if (isCurrent) setLoadingDetails(false);
       }
     };
 
@@ -183,7 +176,6 @@ const ProgressAnalytics = () => {
     // If reports exist, also ensure plan creations appear in the activity feed
     if (reports && reports.length > 0) {
       reports.forEach((rep) => {
-        const repTime = new Date(rep.createdAt).getTime();
         // Check if already in list
         const exists = list.some(
           (a) => a.metadata?.reportId === rep._id || a.message?.includes(rep.title)

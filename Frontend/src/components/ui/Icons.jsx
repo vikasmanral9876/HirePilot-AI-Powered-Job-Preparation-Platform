@@ -1,5 +1,3 @@
-import React from "react";
-
 export const Logo = ({ size = 28, className = "" }) => (
   <svg
     width={size}

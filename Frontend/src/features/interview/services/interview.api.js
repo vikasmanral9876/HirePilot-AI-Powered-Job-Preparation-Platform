@@ -52,7 +52,7 @@ api.interceptors.response.use(
           error.response.data = parsed;
           if (parsed.message) error.message = parsed.message;
         }
-      } catch (e) {
+      } catch {
         // Blob is not JSON, retain default error
       }
     }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import {
   FileText,
@@ -18,6 +18,8 @@ const RecentInterviews = ({
   onRetryResume,
   downloadingId = null,
   retryingId = null,
+  downloadingIds = new Set(),
+  retryingIds = new Set(),
   loading = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -37,7 +39,7 @@ const RecentInterviews = ({
         day: "numeric",
         year: "numeric",
       }).format(d);
-    } catch (e) {
+    } catch {
       return "Recently";
     }
   };
@@ -85,126 +87,137 @@ const RecentInterviews = ({
           </div>
         ) : filteredReports.length > 0 ? (
           <div className="interview-list">
-            {filteredReports.map((report) => (
-              <div key={report._id} className="interview-row">
-                <div className="interview-row__info">
-                  <h3 className="title">{report.title || "Target Position Plan"}</h3>
-                  <div className="meta">
-                    <span className="date">
-                      <Calendar size={13} />
-                      {formatDate(report.createdAt)}
-                    </span>
-                    <span>•</span>
-                    <span>Role ID: #{report._id.substring(report._id.length - 6)}</span>
+            {filteredReports.map((report) => {
+              const isDownloading =
+                downloadingIds?.has?.(report._id) ||
+                (typeof downloadingIds === "object" && downloadingIds?.[report._id]) ||
+                downloadingId === report._id;
+              const isRetrying =
+                retryingIds?.has?.(report._id) ||
+                (typeof retryingIds === "object" && retryingIds?.[report._id]) ||
+                retryingId === report._id;
+
+              return (
+                <div key={report._id} className="interview-row">
+                  <div className="interview-row__info">
+                    <h3 className="title">{report.title || "Target Position Plan"}</h3>
+                    <div className="meta">
+                      <span className="date">
+                        <Calendar size={13} />
+                        {formatDate(report.createdAt)}
+                      </span>
+                      <span>•</span>
+                      <span>Role ID: #{report._id.substring(report._id.length - 6)}</span>
+                    </div>
+                  </div>
+
+                  <div className="interview-row__actions">
+                    <div className={`score-pill ${getScoreClass(report.matchScore)}`}>
+                      <span>{report.matchScore ?? 0}%</span>
+                      <span style={{ fontSize: "0.68rem", opacity: 0.85 }}>match</span>
+                    </div>
+
+                    {report.atsResume?.status === "generating" ? (
+                      <button
+                        type="button"
+                        className="action-btn"
+                        disabled
+                        title="ATS resume is currently preparing in the background"
+                        style={{ opacity: 0.75, cursor: "not-allowed" }}
+                        aria-busy="true"
+                      >
+                        <Loader2 size={14} className="spin-loader" />
+                        <span>Preparing...</span>
+                      </button>
+                    ) : report.atsResume?.status === "ready" ? (
+                      <button
+                        type="button"
+                        className="action-btn"
+                        onClick={() => onDownloadResume(report._id)}
+                        title="Download Tailored ATS Resume PDF"
+                        disabled={isDownloading}
+                        aria-busy={isDownloading}
+                      >
+                        {isDownloading ? (
+                          <>
+                            <Loader2 size={14} className="spin-loader" />
+                            <span>Downloading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Download size={14} />
+                            <span>Download Resume</span>
+                          </>
+                        )}
+                      </button>
+                    ) : report.atsResume?.status === "failed" ? (
+                      <button
+                        type="button"
+                        className="action-btn"
+                        onClick={() =>
+                          onRetryResume
+                            ? onRetryResume(report._id)
+                            : onDownloadResume(report._id)
+                        }
+                        title="Resume generation failed. Click to retry"
+                        disabled={isRetrying}
+                        aria-busy={isRetrying}
+                        style={{
+                          color: "#f87171",
+                          borderColor: "rgba(239, 68, 68, 0.3)",
+                        }}
+                      >
+                        {isRetrying ? (
+                          <>
+                            <Loader2 size={14} className="spin-loader" />
+                            <span>Retrying...</span>
+                          </>
+                        ) : (
+                          <>
+                            <RotateCcw size={14} />
+                            <span>Retry</span>
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="action-btn"
+                        onClick={() =>
+                          onRetryResume
+                            ? onRetryResume(report._id)
+                            : onDownloadResume(report._id)
+                        }
+                        title="Generate Tailored ATS Resume"
+                        disabled={isRetrying}
+                        aria-busy={isRetrying}
+                      >
+                        {isRetrying ? (
+                          <>
+                            <Loader2 size={14} className="spin-loader" />
+                            <span>Preparing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={14} />
+                            <span>Generate Resume</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    <Link
+                      to={`/interview/${report._id}`}
+                      className="action-btn action-btn--primary"
+                      title="Open Detailed Strategy & Road Map"
+                    >
+                      <span>View Plan</span>
+                      <ExternalLink size={14} />
+                    </Link>
                   </div>
                 </div>
-
-                <div className="interview-row__actions">
-                  <div className={`score-pill ${getScoreClass(report.matchScore)}`}>
-                    <span>{report.matchScore ?? 0}%</span>
-                    <span style={{ fontSize: "0.68rem", opacity: 0.85 }}>match</span>
-                  </div>
-
-                  {report.atsResume?.status === "generating" ? (
-                    <button
-                      type="button"
-                      className="action-btn"
-                      disabled
-                      title="ATS resume is currently preparing in the background"
-                      style={{ opacity: 0.75, cursor: "not-allowed" }}
-                      aria-busy="true"
-                    >
-                      <Loader2 size={14} className="spin-loader" />
-                      <span>Preparing...</span>
-                    </button>
-                  ) : report.atsResume?.status === "ready" ? (
-                    <button
-                      type="button"
-                      className="action-btn"
-                      onClick={() => onDownloadResume(report._id)}
-                      title="Download Tailored ATS Resume PDF"
-                      disabled={downloadingId === report._id}
-                      aria-busy={downloadingId === report._id}
-                    >
-                      {downloadingId === report._id ? (
-                        <>
-                          <Loader2 size={14} className="spin-loader" />
-                          <span>Downloading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download size={14} />
-                          <span>Download Resume</span>
-                        </>
-                      )}
-                    </button>
-                  ) : report.atsResume?.status === "failed" ? (
-                    <button
-                      type="button"
-                      className="action-btn"
-                      onClick={() =>
-                        onRetryResume
-                          ? onRetryResume(report._id)
-                          : onDownloadResume(report._id)
-                      }
-                      title="Resume generation failed. Click to retry"
-                      disabled={retryingId === report._id}
-                      aria-busy={retryingId === report._id}
-                      style={{
-                        color: "#f87171",
-                        borderColor: "rgba(239, 68, 68, 0.3)",
-                      }}
-                    >
-                      {retryingId === report._id ? (
-                        <>
-                          <Loader2 size={14} className="spin-loader" />
-                          <span>Retrying...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RotateCcw size={14} />
-                          <span>Retry</span>
-                        </>
-                      )}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="action-btn"
-                      onClick={() =>
-                        onRetryResume
-                          ? onRetryResume(report._id)
-                          : onDownloadResume(report._id)
-                      }
-                      title="Generate Tailored ATS Resume"
-                      disabled={retryingId === report._id}
-                      aria-busy={retryingId === report._id}
-                    >
-                      {retryingId === report._id ? (
-                        <>
-                          <Loader2 size={14} className="spin-loader" />
-                          <span>Preparing...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={14} />
-                          <span>Generate Resume</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  <Link
-                    to={`/interview/${report._id}`}
-                    className="action-btn action-btn--primary"
-                    title="Open Detailed Strategy & Road Map"
-                  >
-                    <span>View Plan</span>
-                    <ExternalLink size={14} />
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : reports.length > 0 ? (
           // Search returned 0 matches

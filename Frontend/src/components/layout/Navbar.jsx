@@ -1,4 +1,3 @@
-import React from "react";
 import { Link, useLocation } from "react-router";
 import UserDropdown from "./UserDropdown";
 import { Menu, Plus } from "../ui/Icons";

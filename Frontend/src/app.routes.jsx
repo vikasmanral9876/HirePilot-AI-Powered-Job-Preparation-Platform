@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import Protected from "./features/auth/components/Protected";
 import AppLayout from "./components/layout/AppLayout";

@@ -141,7 +141,7 @@ export const useAuth = () => {
             setUser(null);
           }
         }
-      } catch (err) {
+      } catch {
         if (isMounted) {
           setUser(null);
         }

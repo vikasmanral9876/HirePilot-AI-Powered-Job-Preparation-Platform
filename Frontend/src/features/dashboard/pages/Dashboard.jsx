@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { useInterview } from "../../interview/hooks/useInterview";
 import { getInterviewReportById } from "../../interview/services/interview.api";
@@ -18,8 +18,8 @@ const Dashboard = () => {
   const { reports, getReports, getResumePdf, retryResume, loading } = useInterview();
 
   const [activeDetailedReport, setActiveDetailedReport] = useState(null);
-  const [downloadingId, setDownloadingId] = useState(null);
-  const [retryingId, setRetryingId] = useState(null);
+  const [downloadingIds, setDownloadingIds] = useState(() => new Set());
+  const [retryingIds, setRetryingIds] = useState(() => new Set());
   const [downloadSuccessMessage, setDownloadSuccessMessage] = useState("");
   const [downloadErrorMessage, setDownloadErrorMessage] = useState("");
 
@@ -47,7 +47,7 @@ const Dashboard = () => {
           if (statusRes?.status && statusRes.status !== "generating") {
             shouldRefresh = true;
           }
-        } catch (e) {
+        } catch {
           // ignore
         }
       }
@@ -84,8 +84,8 @@ const Dashboard = () => {
   }, [reports]);
 
   const handleDownloadResume = async (reportId) => {
-    if (!reportId || downloadingId === reportId) return;
-    setDownloadingId(reportId);
+    if (!reportId || downloadingIds.has(reportId)) return;
+    setDownloadingIds((prev) => new Set(prev).add(reportId));
     setDownloadSuccessMessage("");
     setDownloadErrorMessage("");
     try {
@@ -100,13 +100,17 @@ const Dashboard = () => {
         err?.message || "Failed to download your resume PDF. Please try again shortly."
       );
     } finally {
-      setDownloadingId(null);
+      setDownloadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(reportId);
+        return next;
+      });
     }
   };
 
   const handleRetryResume = async (reportId) => {
-    if (!reportId || retryingId === reportId) return;
-    setRetryingId(reportId);
+    if (!reportId || retryingIds.has(reportId)) return;
+    setRetryingIds((prev) => new Set(prev).add(reportId));
     setDownloadSuccessMessage("");
     setDownloadErrorMessage("");
     try {
@@ -119,7 +123,11 @@ const Dashboard = () => {
         err?.message || "Failed to restart resume generation."
       );
     } finally {
-      setRetryingId(null);
+      setRetryingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(reportId);
+        return next;
+      });
     }
   };
 
@@ -156,8 +164,8 @@ const Dashboard = () => {
             reports={reports}
             onDownloadResume={handleDownloadResume}
             onRetryResume={handleRetryResume}
-            downloadingId={downloadingId}
-            retryingId={retryingId}
+            downloadingIds={downloadingIds}
+            retryingIds={retryingIds}
             loading={loading}
           />
 

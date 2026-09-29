@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { CheckCircle2, AlertCircle, Sparkles, X } from "./Icons";
 
 /**
@@ -11,13 +11,21 @@ const Toast = ({
   onClose,
   duration = 4000,
 }) => {
+  const onCloseRef = useRef(onClose);
+
+  // Keep callback reference updated without resetting the auto-dismiss timer
   useEffect(() => {
-    if (!message || !duration || !onClose) return;
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // Stable dismiss timer dependent only on message and duration
+  useEffect(() => {
+    if (!message || !duration) return;
     const timer = setTimeout(() => {
-      onClose();
+      onCloseRef.current?.();
     }, duration);
     return () => clearTimeout(timer);
-  }, [message, duration, onClose]);
+  }, [message, duration]);
 
   if (!message) return null;
 

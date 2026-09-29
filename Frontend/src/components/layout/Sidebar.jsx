@@ -1,4 +1,3 @@
-import React from "react";
 import { NavLink, Link, useLocation } from "react-router";
 import {
   Logo,

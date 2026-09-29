@@ -1,4 +1,3 @@
-import React from "react";
 import { Navigate } from "react-router";
 import { useAuth } from "../hooks/useAuth";
 import { Logo, Loader2 } from "../../../components/ui/Icons";

@@ -1,10 +1,10 @@
-import React, { useState, useRef, useEffect } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useRef, useEffect } from "react";
 import "../style/home.scss";
 import { useInterview } from "../hooks/useInterview.js";
 import { useNavigate, useLocation } from "react-router";
 import {
   saveStagedResume,
-  getStagedResume,
   clearStagedResume,
 } from "../services/resumeStorage.js";
 import {
@@ -13,19 +13,26 @@ import {
   X,
   Loader2,
   Sparkles,
-  CheckCircle2,
 } from "../../../components/ui/Icons";
 import Toast from "../../../components/ui/Toast";
 
-const isPageReload = (() => {
-  try {
-    const navEntry = window.performance?.getEntriesByType?.("navigation")?.[0];
-    if (navEntry) return navEntry.type === "reload";
-    return window.performance?.navigation?.type === 1;
-  } catch (e) {
-    return false;
+let documentReloadDecision;
+let documentReloadDecisionConsumed = false;
+
+const getDocumentReloadDecision = () => {
+  if (documentReloadDecisionConsumed) return false;
+  if (documentReloadDecision === undefined) {
+    try {
+      const navEntry = window.performance?.getEntriesByType?.("navigation")?.[0];
+      documentReloadDecision = navEntry
+        ? navEntry.type === "reload"
+        : window.performance?.navigation?.type === 1;
+    } catch {
+      documentReloadDecision = false;
+    }
   }
-})();
+  return documentReloadDecision;
+};
 
 const Home = () => {
   const location = useLocation();
@@ -38,9 +45,10 @@ const Home = () => {
   } = useInterview();
   const [jobDescription, setJobDescription] = useState("");
   const [selfDescription, setSelfDescription] = useState("");
-  const [selectedFile, setSelectedFile] = useState(
-    !isPageReload && (location.state?.resumeFile || stagedResumeFile) ? (location.state?.resumeFile || stagedResumeFile) : null
-  );
+  const [selectedFile, setSelectedFile] = useState(() => {
+    if (getDocumentReloadDecision()) return null;
+    return location.state?.resumeFile || stagedResumeFile || null;
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isQuotaError, setIsQuotaError] = useState(false);
@@ -50,10 +58,12 @@ const Home = () => {
 
   const navigate = useNavigate();
 
-  // Reset resume on page refresh or sync in-memory navigation state
+  // One-time initialization on initial mount: reset staged resume if page was reloaded
   useEffect(() => {
-    if (isPageReload) {
-      setSelectedFile(null);
+    const isReload = getDocumentReloadDecision();
+    documentReloadDecisionConsumed = true;
+
+    if (isReload) {
       setStagedResumeFile(null);
       clearStagedResume();
       if (resumeInputRef.current) {
@@ -62,10 +72,13 @@ const Home = () => {
       if (window.history?.replaceState) {
         window.history.replaceState({}, document.title);
       }
-    } else if (location.state?.resumeFile) {
+      return;
+    }
+
+    if (location.state?.resumeFile) {
       setSelectedFile(location.state.resumeFile);
     }
-  }, [location.state]);
+  }, [location.state, setStagedResumeFile]);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];

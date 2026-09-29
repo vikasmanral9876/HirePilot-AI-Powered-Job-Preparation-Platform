@@ -18,7 +18,7 @@ const DB_NAME = "hirepilot_resume_db";
 if (typeof window !== "undefined" && window.indexedDB) {
   try {
     window.indexedDB.deleteDatabase(DB_NAME);
-  } catch (e) {
+  } catch {
     // ignore
   }
 }
@@ -26,7 +26,7 @@ if (typeof window !== "undefined" && window.indexedDB) {
 /**
  * Save staged resume - no-op to prevent cross-user and cross-refresh persistence.
  */
-export async function saveStagedResume(_file) {
+export async function saveStagedResume() {
   // Deliberately no-op: files must not be written to persistent browser disks
   return;
 }
@@ -46,7 +46,7 @@ export async function clearStagedResume() {
   if (typeof window !== "undefined" && window.indexedDB) {
     try {
       window.indexedDB.deleteDatabase(DB_NAME);
-    } catch (e) {
+    } catch {
       // ignore
     }
   }

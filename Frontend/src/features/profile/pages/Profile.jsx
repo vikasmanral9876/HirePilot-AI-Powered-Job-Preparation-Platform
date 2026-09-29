@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { useInterview } from "../../interview/hooks/useInterview";
@@ -13,12 +13,10 @@ import {
   Edit3,
   FileCheck,
   Plus,
-  Trash2,
   CheckCircle2,
   X,
   MapPin,
   Globe,
-  Camera,
   Save,
   ExternalLink,
   ShieldCheck,

@@ -1,10 +1,9 @@
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router";
 import { useInterview } from "../../interview/hooks/useInterview";
 import { getInterviewReportById } from "../../interview/services/interview.api";
 import {
   saveStagedResume,
-  getStagedResume,
   clearStagedResume,
 } from "../../interview/services/resumeStorage";
 import "../resume.scss";
@@ -13,15 +12,10 @@ import {
   Download,
   FileText,
   Sparkles,
-  ShieldCheck,
   CheckCircle2,
-  Clock,
   Eye,
   EyeOff,
-  Plus,
   X,
-  Target,
-  AlertCircle,
   RotateCcw,
   Loader2,
 } from "../../../components/ui/Icons";
@@ -61,7 +55,7 @@ const ResumeManager = () => {
         const navEntry = window.performance?.getEntriesByType?.("navigation")?.[0];
         if (navEntry) return navEntry.type === "reload";
         return window.performance?.navigation?.type === 1;
-      } catch (e) {
+      } catch {
         return false;
       }
     })();
@@ -124,7 +118,7 @@ const ResumeManager = () => {
           );
           getReports();
         }
-      } catch (err) {
+      } catch {
         // ignore
       }
     }, 3500);
