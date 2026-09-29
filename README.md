@@ -498,7 +498,7 @@ Add screenshots of the following sections here to showcase the application:
 ### Login
 
 <a href="screenshots/login.png">
-  <img src="screenshots/login.png" alt="HirePilot Login" width="800">
+  <img src="screenshots/login.png" alt="HirePilot Login" width="500">
 </a>
 
 ### Dashboard
