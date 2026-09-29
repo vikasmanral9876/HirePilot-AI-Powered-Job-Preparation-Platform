@@ -80,43 +80,9 @@ async function generateInterviewReportController(req, res) {
     // Asynchronously trigger ATS resume generation in the background
     triggerAtsResumeGeneration(interviewReport._id);
   } catch (error) {
-    console.error("Error in generateInterviewReportController:", error);
-    const rawMsg = error?.message || "";
-
-    if (rawMsg.includes("quota has been reached") || error?.isQuotaExhausted) {
-      return res.status(429).json({
-        message: "Gemini API quota has been reached. Please try again later.",
-      });
-    }
-
-    if (rawMsg.includes("rate limit reached")) {
-      return res.status(429).json({
-        message: "Gemini API rate limit reached. Please try again in a few moments.",
-      });
-    }
-
-    if (rawMsg.includes("authentication failed") || error?.isAuthError) {
-      return res.status(503).json({
-        message: "Gemini service configuration error. Please contact support.",
-      });
-    }
-
-    const isGeminiDemand =
-      rawMsg.toLowerCase().includes("gemini") ||
-      rawMsg.toLowerCase().includes("demand") ||
-      rawMsg.toLowerCase().includes("overloaded") ||
-      rawMsg.toLowerCase().includes("503") ||
-      rawMsg.toLowerCase().includes("429") ||
-      rawMsg.toLowerCase().includes("resource_exhausted") ||
-      rawMsg.toLowerCase().includes("temporarily unavailable") ||
-      rawMsg.toLowerCase().includes("failed to generate");
-
-    const message = isGeminiDemand || !error.message
-      ? "We couldn't generate your interview. Please try again."
-      : error.message;
-
-    res.status(500).json({
-      message,
+    console.error("Gemini interview plan generation failed:", error?.message || error);
+    return res.status(503).json({
+      message: "We're temporarily unable to generate your interview plan. Please try again later.",
     });
   }
 }

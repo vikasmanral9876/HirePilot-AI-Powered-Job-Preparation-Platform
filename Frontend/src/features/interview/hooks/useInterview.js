@@ -169,98 +169,28 @@ export const useInterview = () => {
       }
       return newReport;
     } catch (error) {
-      console.error("Error generating interview report:", error);
+      console.error("Error generating interview report:", error?.message || error);
       const rawMsg = error?.response?.data?.message || error?.message || "";
       const status = error?.response?.status;
 
-      // 1. Genuine Quota Exhaustion (explicit quota indicator in message or flag)
-      const isQuota =
-        Boolean(error?.isQuotaExhausted || error?.response?.data?.isQuotaExhausted) ||
-        rawMsg.toLowerCase().includes("quota");
-
-      if (isQuota) {
-        const friendlyError = new Error(
-          "AI generation is temporarily unavailable because the current AI service quota has been reached. Please try again later.",
-        );
-        friendlyError.isQuotaExhausted = true;
-        friendlyError.response = {
-          status: 429,
-          data: {
-            message:
-              "AI generation is temporarily unavailable because the current AI service quota has been reached. Please try again later.",
-          },
-        };
-        throw friendlyError;
+      // 1. Validation error from server (400)
+      if (status === 400 && error?.response?.data?.message) {
+        throw new Error(error.response.data.message);
       }
 
-      // 2. Rate limiting / Throttling (or undetermined 429 cause)
-      if (status === 429) {
-        const isExplicitRateLimit =
-          rawMsg.toLowerCase().includes("rate limit") ||
-          rawMsg.toLowerCase().includes("too many requests") ||
-          rawMsg.toLowerCase().includes("throttl");
-
-        const rateLimitMsg = isExplicitRateLimit && rawMsg
-          ? rawMsg
-          : "AI service is temporarily busy due to rate limits. Please try again in a few moments.";
-
-        const rateLimitError = new Error(rateLimitMsg);
-        rateLimitError.isRateLimited = true;
-        rateLimitError.response = {
-          status: 429,
-          data: { message: rateLimitMsg },
-        };
-        throw rateLimitError;
-      }
-
-      // 3. Authentication
+      // 2. Authentication error (401)
       if (status === 401) {
         const authError = new Error("Your session has expired. Please sign in again.");
-        authError.response = {
-          status: 401,
-          data: { message: "Your session has expired. Please sign in again." },
-        };
+        authError.response = { status: 401, data: { message: "Your session has expired. Please sign in again." } };
         throw authError;
       }
 
-      // 4. Network failure
-      if (!error?.response) {
-        const netError = new Error(
-          "Unable to connect to the server. Please check your connection and try again.",
-        );
-        throw netError;
-      }
-
-      // 5. Existing 503 / High demand handling (preserved)
-      const isGeminiDemand =
-        rawMsg.toLowerCase().includes("gemini") ||
-        rawMsg.toLowerCase().includes("demand") ||
-        rawMsg.toLowerCase().includes("overloaded") ||
-        rawMsg.toLowerCase().includes("503") ||
-        rawMsg.toLowerCase().includes("temporarily unavailable") ||
-        rawMsg.toLowerCase().includes("resource_exhausted") ||
-        status === 503;
-
-      if (isGeminiDemand) {
-        const friendlyError = new Error(
-          "AI generation is temporarily unavailable due to high demand. Please try again later.",
-        );
-        friendlyError.response = {
-          status: 503,
-          data: {
-            message: "AI generation is temporarily unavailable due to high demand. Please try again later.",
-          },
-        };
-        throw friendlyError;
-      }
-
-      // 6. Generic Fallback
-      const fallbackError = new Error(
-        error?.response?.data?.message && !error.response.data.message.includes("at ")
-          ? error.response.data.message
-          : "We couldn't generate your interview. Please try again.",
+      // 3. For any AI failure (503, 429, network, timeout, or malformed response)
+      const friendlyError = new Error(
+        "We're temporarily unable to generate your interview plan. Please try again later."
       );
-      throw fallbackError;
+      friendlyError.response = error?.response;
+      throw friendlyError;
     } finally {
       setLoading(false);
     }

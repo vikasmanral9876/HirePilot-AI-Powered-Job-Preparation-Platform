@@ -25,6 +25,16 @@ const Login = () => {
 
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
+  const handleGoogleLoginRef = useRef(handleGoogleLogin);
+  useEffect(() => {
+    handleGoogleLoginRef.current = handleGoogleLogin;
+  }, [handleGoogleLogin]);
+
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
+
   // If already logged in, redirect directly to dashboard
   useEffect(() => {
     if (user) {
@@ -35,29 +45,36 @@ const Login = () => {
   // Initialize Google Identity Services
   useEffect(() => {
     if (!clientId) {
-      console.warn("VITE_GOOGLE_CLIENT_ID is not configured in environment variables.");
       return;
     }
 
-    const renderGoogleButton = () => {
-      if (window.google?.accounts?.id && googleBtnRef.current) {
-        try {
+    let isCancelled = false;
+
+    const setupGoogleSignIn = () => {
+      if (isCancelled || !window.google?.accounts?.id) return;
+
+      try {
+        // Initialize Google Identity Services only once per application lifecycle
+        if (window.__hirepilot_gsi_client_id !== clientId) {
           window.google.accounts.id.initialize({
             client_id: clientId,
             callback: async (response) => {
               if (response?.credential) {
                 setErrorMessage("");
-                const result = await handleGoogleLogin({ idToken: response.credential });
+                const result = await handleGoogleLoginRef.current({ idToken: response.credential });
                 if (result.success) {
-                  navigate("/dashboard", { replace: true });
+                  navigateRef.current("/dashboard", { replace: true });
                 } else {
                   setErrorMessage(result.error || "Google sign-in failed.");
                 }
               }
             },
           });
+          window.__hirepilot_gsi_client_id = clientId;
+        }
 
-          // Render official Google button
+        // Render official Google button into the mounted DOM container
+        if (googleBtnRef.current) {
           googleBtnRef.current.innerHTML = "";
           window.google.accounts.id.renderButton(googleBtnRef.current, {
             theme: "filled_black",
@@ -68,24 +85,31 @@ const Login = () => {
             logo_alignment: "left",
             width: googleBtnRef.current.offsetWidth || 376,
           });
-        } catch (err) {
-          console.error("Error initializing Google Identity Services:", err);
         }
+      } catch (err) {
+        console.error("Error initializing Google Identity Services:", err?.message || err);
       }
     };
 
     if (window.google?.accounts?.id) {
-      renderGoogleButton();
+      setupGoogleSignIn();
     } else {
       const timer = setInterval(() => {
         if (window.google?.accounts?.id) {
           clearInterval(timer);
-          renderGoogleButton();
+          setupGoogleSignIn();
         }
       }, 100);
-      return () => clearInterval(timer);
+      return () => {
+        isCancelled = true;
+        clearInterval(timer);
+      };
     }
-  }, [clientId, handleGoogleLogin, navigate]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [clientId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

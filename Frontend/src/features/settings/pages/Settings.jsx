@@ -66,8 +66,7 @@ const Settings = () => {
   const [selectedTheme, setSelectedTheme] = useState(() => {
     try {
       return localStorage.getItem("hirepilot_theme") || "neon";
-    } catch (e) {
-      console.error(e);
+    } catch {
       return "neon";
     }
   });

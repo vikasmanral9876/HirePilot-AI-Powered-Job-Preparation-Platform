@@ -104,14 +104,9 @@ api.interceptors.response.use(
 
     // 7. Rate Limit & Gemini Quota
     if (status === 429) {
-      if (serverMsg.toLowerCase().includes("quota")) {
-        error.isQuotaExhausted = true;
-        error.message =
-          "AI generation is temporarily unavailable because the current AI service quota has been reached. Please try again later.";
-      } else {
-        error.message =
-          "Request limit reached. Please wait a few moments before trying again.";
-      }
+      error.isQuotaExhausted = true;
+      error.message =
+        "We're temporarily unable to generate your interview plan. Please try again later.";
       return Promise.reject(error);
     }
 
@@ -120,33 +115,44 @@ api.interceptors.response.use(
       if (isBlob) {
         error.message =
           "Unable to download the resume right now. Please try again.";
-      } else if (serverMsg.toLowerCase().includes("quota")) {
-        error.isQuotaExhausted = true;
-        error.message =
-          "AI generation is temporarily unavailable because the current AI service quota has been reached. Please try again later.";
       } else if (
+        status === 503 ||
+        serverMsg === "We're temporarily unable to generate your interview plan. Please try again later." ||
+        serverMsg.toLowerCase().includes("quota") ||
         serverMsg.toLowerCase().includes("gemini") ||
         serverMsg.toLowerCase().includes("demand") ||
         serverMsg.toLowerCase().includes("overloaded")
       ) {
         error.message =
-          "AI generation is temporarily unavailable. Please try again later.";
+          "We're temporarily unable to generate your interview plan. Please try again later.";
+      } else if (
+        serverMsg &&
+        !serverMsg.includes("node_modules") &&
+        !serverMsg.includes("at ") &&
+        !serverMsg.includes("Mongo") &&
+        !serverMsg.includes("CastError")
+      ) {
+        error.message = serverMsg;
       } else {
-        error.message = "Something went wrong. Please try again.";
+        error.message =
+          "We're temporarily unable to generate your interview plan. Please try again later.";
       }
       return Promise.reject(error);
     }
 
     // Fallback sanitation: never expose stack traces or raw technical strings
     if (
+      !error.message ||
       serverMsg.includes("generativelanguage.googleapis.com") ||
       serverMsg.includes("Mongo") ||
       serverMsg.includes("CastError") ||
       serverMsg.includes("node_modules") ||
       serverMsg.includes("at ") ||
-      serverMsg.includes("ECONNREFUSED")
+      serverMsg.includes("ECONNREFUSED") ||
+      error.message.includes("at ")
     ) {
-      error.message = "Something went wrong. Please try again.";
+      error.message =
+        "We're temporarily unable to generate your interview plan. Please try again later.";
     }
 
     return Promise.reject(error);

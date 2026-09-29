@@ -54,6 +54,7 @@ const Home = () => {
   const [isQuotaError, setIsQuotaError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successToast, setSuccessToast] = useState("");
+  const [errorToast, setErrorToast] = useState("");
   const resumeInputRef = useRef();
 
   const navigate = useNavigate();
@@ -133,15 +134,20 @@ const Home = () => {
   const handleGenerateReport = async () => {
     if (isSubmitting || loading) return;
     setErrorMessage("");
+    setErrorToast("");
     setIsQuotaError(false);
 
     const resumeFile = selectedFile || resumeInputRef.current?.files?.[0];
     if (!resumeFile) {
-      setErrorMessage("Please upload your resume (PDF) before generating the plan.");
+      const msg = "Please upload your resume (PDF) before generating the plan.";
+      setErrorMessage(msg);
+      setErrorToast(msg);
       return;
     }
     if (!jobDescription || !jobDescription.trim()) {
-      setErrorMessage("Please paste the job description to tailor your preparation plan.");
+      const msg = "Please paste the job description to tailor your preparation plan.";
+      setErrorMessage(msg);
+      setErrorToast(msg);
       return;
     }
 
@@ -170,25 +176,19 @@ const Home = () => {
         navigate(`/interview/${data._id}`, { state: { newPlanCreated: true } });
       }
     } catch (err) {
-      console.error("Failed to generate interview strategy:", err);
-      const rawMsg = err?.message || "";
-      const isQuota =
-        err?.isQuotaExhausted ||
-        rawMsg.toLowerCase().includes("quota") ||
-        rawMsg.toLowerCase().includes("temporarily unavailable") ||
-        err?.response?.status === 429;
+      console.error("Failed to generate interview strategy:", err?.message || err);
+      const isValidation =
+        err?.message?.includes("Please upload your resume") ||
+        err?.message?.includes("Invalid or corrupted PDF") ||
+        err?.message?.includes("Could not extract readable text") ||
+        err?.message?.includes("Resume file (PDF) is required");
 
-      if (isQuota) {
-        setIsQuotaError(true);
-        setErrorMessage("AI generation is temporarily unavailable. Please try again later.");
-      } else {
-        setIsQuotaError(false);
-        setErrorMessage(
-          err?.message && !err.message.includes("at ")
-            ? err.message
-            : "We couldn't generate your interview. Please try again."
-        );
-      }
+      const safeMsg = isValidation
+        ? err.message
+        : "We're temporarily unable to generate your interview plan. Please try again later.";
+
+      setErrorMessage(safeMsg);
+      setErrorToast(safeMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -196,12 +196,19 @@ const Home = () => {
 
   return (
     <div className="home-page">
-      {/* Toast Notification */}
+      {/* Toast Notifications */}
       {successToast && (
         <Toast
           message={successToast}
           type="success"
           onClose={() => setSuccessToast("")}
+        />
+      )}
+      {errorToast && (
+        <Toast
+          message={errorToast}
+          type="error"
+          onClose={() => setErrorToast("")}
         />
       )}
 
@@ -224,19 +231,12 @@ const Home = () => {
               <AlertCircle size={20} />
             </div>
             <div className="home-error-banner__content">
-              {isQuotaError ? (
+              {errorMessage === "We're temporarily unable to generate your interview plan. Please try again later." ? (
                 <>
                   <strong className="home-error-banner__title">
-                    AI Service Notice
+                    We're temporarily unable to generate your interview plan.
                   </strong>
-                  <span className="home-error-banner__desc">{errorMessage}</span>
-                </>
-              ) : errorMessage.includes("couldn't generate") ? (
-                <>
-                  <strong className="home-error-banner__title">
-                    We couldn't generate your interview.
-                  </strong>
-                  <span className="home-error-banner__desc">Please try again.</span>
+                  <span className="home-error-banner__desc">Please try again later.</span>
                 </>
               ) : (
                 <span className="home-error-banner__text">{errorMessage}</span>
@@ -245,7 +245,7 @@ const Home = () => {
           </div>
 
           <div className="home-error-banner__actions">
-            {!isQuotaError && errorMessage.includes("couldn't generate") && (
+            {errorMessage === "We're temporarily unable to generate your interview plan. Please try again later." && (
               <button
                 type="button"
                 onClick={handleGenerateReport}
@@ -260,6 +260,7 @@ const Home = () => {
               type="button"
               onClick={() => {
                 setErrorMessage("");
+                setErrorToast("");
                 setIsQuotaError(false);
               }}
               className="home-error-banner__close-btn"

@@ -82,9 +82,7 @@ async function triggerAtsResumeGeneration(interviewReportId, { forceRetry = fals
         });
       } catch (err) {
         console.error(`Background ATS resume generation failed for ${interviewReportId}:`, err?.message || err);
-        const errMsg = err?.isQuotaExhausted || err?.message?.includes("quota")
-          ? "Gemini API quota has been reached. Please try again later."
-          : "Unable to generate your ATS resume. Please try again.";
+        const errMsg = "We're temporarily unable to generate your ATS resume. Please try again later.";
 
         await interviewReportModel.findByIdAndUpdate(interviewReportId, {
           $set: {

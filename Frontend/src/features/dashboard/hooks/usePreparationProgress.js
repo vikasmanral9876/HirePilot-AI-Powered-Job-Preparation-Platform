@@ -69,8 +69,8 @@ export const usePreparationProgress = (activeReport) => {
   useEffect(() => {
     try {
       localStorage.removeItem("hirepilot_activity_log");
-    } catch (e) {
-      console.error(e);
+    } catch {
+      // Safe storage cleanup
     }
   }, []);
 

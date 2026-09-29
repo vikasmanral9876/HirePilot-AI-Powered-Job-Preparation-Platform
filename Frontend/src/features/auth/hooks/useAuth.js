@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, useCallback } from "react";
 import { AuthContext } from "../auth.context";
 import { login, register, logout, getMe, googleAuth } from "../services/auth.api";
 import { clearStagedResume } from "../../interview/services/resumeStorage";
@@ -12,7 +12,7 @@ export const useAuth = () => {
   const { user, setUser, loading, setLoading } = context;
   const [authError, setAuthError] = useState(null);
 
-  const handleLogin = async ({ email, password }) => {
+  const handleLogin = useCallback(async ({ email, password }) => {
     setLoading(true);
     setAuthError(null);
     clearStagedResume();
@@ -27,15 +27,15 @@ export const useAuth = () => {
       setAuthError(err);
       return { success: false, error: err };
     } catch (err) {
-      const message = err.message || "Invalid email or password";
+      const message = err?.message || "Invalid email or password";
       setAuthError(message);
       return { success: false, error: message };
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setUser]);
 
-  const handleGoogleLogin = async ({ idToken }) => {
+  const handleGoogleLogin = useCallback(async ({ idToken }) => {
     setLoading(true);
     setAuthError(null);
     clearStagedResume();
@@ -50,15 +50,15 @@ export const useAuth = () => {
       setAuthError(err);
       return { success: false, error: err };
     } catch (err) {
-      const message = err.message || "Google sign-in failed";
+      const message = err?.message || "Google sign-in failed";
       setAuthError(message);
       return { success: false, error: message };
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setUser]);
 
-  const handleRegister = async ({ username, email, password }) => {
+  const handleRegister = useCallback(async ({ username, email, password }) => {
     setLoading(true);
     setAuthError(null);
     clearStagedResume();
@@ -73,15 +73,15 @@ export const useAuth = () => {
       setAuthError(err);
       return { success: false, error: err };
     } catch (err) {
-      const message = err.message || "Registration failed";
+      const message = err?.message || "Registration failed";
       setAuthError(message);
       return { success: false, error: message };
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setUser]);
 
-  const updateUserData = (updatedFields) => {
+  const updateUserData = useCallback((updatedFields) => {
     if (updatedFields.username && user) {
       const uId = user.id || user._id || user.email;
       try {
@@ -91,27 +91,27 @@ export const useAuth = () => {
       }
     }
     setUser((prev) => (prev ? { ...prev, ...updatedFields } : updatedFields));
-  };
+  }, [user, setUser]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     setLoading(true);
     clearStagedResume();
     try {
       await logout();
       try {
         localStorage.removeItem("hirepilot_custom_username");
-      } catch (e) {
-        console.error(e);
+      } catch {
+        // Safe storage cleanup
       }
       clearStagedResume();
       setUser(null);
       return { success: true };
     } catch (err) {
-      console.error("Logout error:", err);
+      console.error("Logout error:", err?.message || err);
       try {
         localStorage.removeItem("hirepilot_custom_username");
-      } catch (e) {
-        console.error(e);
+      } catch {
+        // Safe storage cleanup
       }
       clearStagedResume();
       setUser(null);
@@ -119,7 +119,7 @@ export const useAuth = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setUser]);
 
   useEffect(() => {
     let isMounted = true;

@@ -223,7 +223,7 @@ function classifyGeminiError(err) {
       type: "DAILY_QUOTA_EXHAUSTED",
       retryable: false,
       allowModelFallback: false,
-      userMessage: "Gemini API quota has been reached. Please try again later.",
+      userMessage: "AI service quota temporarily exhausted. Please try again later.",
     };
   }
   if (isAuthError(err)) {
@@ -231,7 +231,7 @@ function classifyGeminiError(err) {
       type: "AUTH_ERROR",
       retryable: false,
       allowModelFallback: false,
-      userMessage: "Gemini API authentication failed. Please check your API key.",
+      userMessage: "AI service authentication error. Please contact support.",
     };
   }
   if (isClientError(err)) {
@@ -239,7 +239,7 @@ function classifyGeminiError(err) {
       type: "CLIENT_ERROR",
       retryable: false,
       allowModelFallback: false,
-      userMessage: "Invalid request sent to AI model.",
+      userMessage: "Invalid request sent to AI service.",
     };
   }
   if (isModelUnavailable(err)) {
@@ -247,7 +247,7 @@ function classifyGeminiError(err) {
       type: "MODEL_UNAVAILABLE",
       retryable: false,
       allowModelFallback: true,
-      userMessage: "Configured AI model is unavailable.",
+      userMessage: "AI service model temporarily unavailable.",
     };
   }
   if (isTemporaryRateLimit(err)) {
@@ -256,7 +256,7 @@ function classifyGeminiError(err) {
       retryable: true,
       allowModelFallback: false,
       retryDelayMs: extractRetryDelayMs(err),
-      userMessage: "Gemini API rate limit reached. Please try again in a few moments.",
+      userMessage: "AI service rate limit reached. Please try again in a few moments.",
     };
   }
   if (isTransientServerError(err)) {
@@ -271,7 +271,7 @@ function classifyGeminiError(err) {
     type: "UNKNOWN_ERROR",
     retryable: false,
     allowModelFallback: false,
-    userMessage: "We couldn't generate your interview. Please try again.",
+    userMessage: "We're temporarily unable to generate your interview plan. Please try again later.",
   };
 }
 
@@ -600,25 +600,8 @@ async function generateInterviewReport({
     return safeJsonParse(response.text);
   } catch (err) {
     console.error("Gemini API Error in generateInterviewReport:", err?.message || err);
-    if (err?.isQuotaExhausted || err?.message?.includes("quota")) {
-      const quotaErr = new Error("Gemini API quota has been reached. Please try again later.");
-      quotaErr.status = 429;
-      quotaErr.isQuotaExhausted = true;
-      throw quotaErr;
-    }
-    if (err?.isAuthError || err?.message?.includes("authentication")) {
-      const authErr = new Error("Gemini API authentication failed. Please check your API key.");
-      authErr.status = 401;
-      authErr.isAuthError = true;
-      throw authErr;
-    }
-    if (err?.message?.includes("rate limit")) {
-      const rateLimitErr = new Error("Gemini API rate limit reached. Please try again in a few moments.");
-      rateLimitErr.status = 429;
-      throw rateLimitErr;
-    }
     throw new Error(
-      "We couldn't generate your interview. Please try again.",
+      "We're temporarily unable to generate your interview plan. Please try again later."
     );
   }
 }
@@ -738,13 +721,7 @@ The response MUST be a JSON object with a single field "html" containing the HTM
     return pdfBuffer;
   } catch (err) {
     console.error("Error in generateResumePdf:", err?.message || err);
-    if (err?.isQuotaExhausted || err?.message?.includes("quota")) {
-      const quotaErr = new Error("Gemini API quota has been reached. Please try again later.");
-      quotaErr.status = 429;
-      quotaErr.isQuotaExhausted = true;
-      throw quotaErr;
-    }
-    throw new Error("Failed to generate resume PDF. Please try again.");
+    throw new Error("We're temporarily unable to generate your ATS resume. Please try again later.");
   }
 }
 
