@@ -497,27 +497,27 @@ Add screenshots of the following sections here to showcase the application:
 
 ### Login
 
-```text
-[ Add login screenshot ]
-```
+<a href="screenshots/login.png">
+  <img src="screenshots/login.png" alt="HirePilot Login" width="800">
+</a>
 
 ### Dashboard
 
-```text
-[ Add dashboard screenshot ]
-```
+<a href="screenshots/dashboard.png">
+  <img src="screenshots/dashboard.png" alt="HirePilot Dashboard" width="800">
+</a>
 
 ### Interview Preparation
 
-```text
-[ Add interview setup screenshot ]
-```
+<a href="screenshots/interview-plan.png">
+  <img src="screenshots/interview-plan.png" alt="HirePilot Interview Preparation" width="800">
+</a>
 
 ### Preparation Roadmap
 
-```text
-[ Add roadmap screenshot ]
-```
+<a href="screenshots/roadmap.png">
+  <img src="screenshots/roadmap.png" alt="HirePilot Preparation Roadmap" width="800">
+</a>
 
 ### ATS Resume
 
